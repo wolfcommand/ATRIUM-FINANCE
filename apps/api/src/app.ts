@@ -4,6 +4,7 @@ import { authRouter } from "./routes/auth.js";
 import { handoffRouter } from "./routes/handoff.js";
 import { accessRouter } from "./routes/access.js";
 import { eventsRouter } from "./routes/events.js";
+import { adminRouter } from "./routes/admin.js";
 import { registerFinanceEmployeeRefConsumer } from "./modules/events/financeEmployeeRef.js";
 import { clearBusForTests } from "./modules/events/bus.js";
 
@@ -35,6 +36,7 @@ export function createApp(opts?: { registerConsumers?: boolean }) {
   app.use(handoffRouter());
   app.use(accessRouter());
   app.use(eventsRouter());
+  app.use(adminRouter());
 
   if (opts?.registerConsumers !== false && !consumersRegistered) {
     registerFinanceEmployeeRefConsumer();

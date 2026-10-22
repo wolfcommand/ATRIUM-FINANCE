@@ -8,6 +8,7 @@ import { adminRouter } from "./routes/admin.js";
 import { hrRouter } from "./routes/hr.js";
 import { academyRouter } from "./routes/academy.js";
 import { approvalsRouter } from "./routes/approvals.js";
+import { contentRouter } from "./routes/content.js";
 import { registerFinanceEmployeeRefConsumer } from "./modules/finance/employeeRefConsumer.js";
 import { registerAcademyOnboardingConsumer } from "./modules/academy/onboardingConsumer.js";
 import { resetOutboxHandlersForTests } from "./modules/integration/outbox.js";
@@ -47,6 +48,7 @@ export function createApp(opts?: { registerConsumers?: boolean }) {
   app.use(hrRouter());
   app.use(academyRouter());
   app.use(approvalsRouter());
+  app.use(contentRouter());
 
   if (opts?.registerConsumers !== false && !consumersRegistered) {
     registerFinanceEmployeeRefConsumer();

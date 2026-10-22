@@ -24,8 +24,13 @@ const SEED_USERS: SeedUser[] = [
     companies: [
       { code: "BZG", apps: ["portal", "finance", "hr"] },
       { code: "AMG", apps: ["portal", "finance", "hr"] },
-      { code: "GGV", apps: ["portal", "finance", "hr"] },
+      { code: "GGV", apps: ["portal", "finance", "hr", "content"] },
     ],
+  },
+  {
+    email: "content.ggv@wolf.example",
+    displayName: "Fake GGV Content",
+    companies: [{ code: "GGV", apps: ["portal", "content"] }],
   },
   {
     email: "finance.amg@wolf.example",
@@ -158,8 +163,15 @@ export function seedDatabase(db = getDb()): void {
       if (membership.apps.includes("hr")) {
         seedHrGrants(db, userId, companyId);
       }
-      // Portal-only staff (no finance/hr add-on) get minimal finance session grants for launcher health
-      if (!membership.apps.includes("finance") && !membership.apps.includes("hr")) {
+      if (membership.apps.includes("content")) {
+        seedContentGrants(db, userId, companyId);
+      }
+      // Portal-only staff (no finance/hr/content add-on) get minimal finance session grants for launcher health
+      if (
+        !membership.apps.includes("finance") &&
+        !membership.apps.includes("hr") &&
+        !membership.apps.includes("content")
+      ) {
         seedStaffGrants(db, userId, companyId);
       }
     }
@@ -255,6 +267,13 @@ const ACADEMY_LEARNER_PERMS = [
   "academy.progress.write",
 ];
 
+const CONTENT_PERMS = [
+  "content.campaign.read",
+  "content.campaign.write",
+  "content.piece.read",
+  "content.piece.write",
+];
+
 /** Base identity grants for every seeded user (group scope). */
 const IDENTITY_BASE_PERMS = [
   "identity.me.read",
@@ -301,10 +320,31 @@ function ensurePermissions(db: ReturnType<typeof getDb>): void {
     ...HR_PERMS,
     ...STAFF_PERMS,
     ...ACADEMY_LEARNER_PERMS,
+    ...CONTENT_PERMS,
     ...IDENTITY_BASE_PERMS,
     ...INTEGRATION_PERMS,
   ]) {
     insert.run(key, key);
+  }
+}
+
+function seedContentGrants(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  companyId: string,
+): void {
+  ensurePermissions(db);
+  const insert = db.prepare(
+    `INSERT INTO grants (id, user_id, role_id, permission_key, scope_type, scope_id, valid_from, valid_to, granted_by, reason, ticket_ref)
+     VALUES (@id, @userId, NULL, @permissionKey, 'company', @companyId, '2024-01-01', NULL, 'seed', 'fake content add-on', NULL)`,
+  );
+  for (const permissionKey of CONTENT_PERMS) {
+    const exists = db
+      .prepare(
+        `SELECT 1 AS ok FROM grants WHERE user_id = ? AND permission_key = ? AND scope_id = ?`,
+      )
+      .get(userId, permissionKey, companyId);
+    if (!exists) insert.run({ id: newId(), userId, permissionKey, companyId });
   }
 }
 

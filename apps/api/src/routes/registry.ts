@@ -103,6 +103,12 @@ export const API_ROUTE_REGISTRY: ApiRouteEntry[] = [
   },
   { method: "GET", path: "/v1/expenses", permission: "finance.expense.read" },
   { method: "POST", path: "/v1/expenses", permission: "finance.expense.write" },
+
+  { method: "GET", path: "/v1/content/campaigns", permission: "content.campaign.read" },
+  { method: "POST", path: "/v1/content/campaigns", permission: "content.campaign.write" },
+  { method: "GET", path: "/v1/content/pieces", permission: "content.piece.read" },
+  { method: "POST", path: "/v1/content/pieces", permission: "content.piece.write" },
+  { method: "POST", path: "/v1/content/pieces/:id/status", permission: "content.piece.write" },
 ];
 
 /** Tables with company_id that must have RLS enabled in Postgres migrations. */
@@ -127,6 +133,8 @@ export const COMPANY_SCOPED_TABLES = [
   "approval_policies",
   "approval_requests",
   "expenses",
+  "content_campaigns",
+  "content_pieces",
 ] as const;
 
 export function listApiRoutesForGuardCheck(): Array<{

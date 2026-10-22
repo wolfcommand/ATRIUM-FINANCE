@@ -171,6 +171,22 @@
 
 ---
 
+## Phase 5 — Content Machine GGV (2026-10-22)
+
+| Item | Decision |
+|---|---|
+| Scope | GGV company only at API gate (`content_ggv_only` if other company) |
+| Surface | `/v1/content/*` + portal `/content`; same authorize/audit pattern |
+| Seed | `content.ggv@wolf.example` + owner GGV content entitlement |
+| Request access | `app.content` supported in self-serve + approve grants |
+
+### Not done
+- Media asset pipeline, scheduling calendar, AI assist, separate content app deployable.
+
+Phase 6 private domain remains out of this monorepo.
+
+---
+
 ## Phase 4 — Approvals + Finance expense core (2026-10-22)
 
 | Item | Decision |

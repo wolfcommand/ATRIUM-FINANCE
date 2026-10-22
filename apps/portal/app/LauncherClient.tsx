@@ -23,11 +23,13 @@ export function LauncherClient({ me }: { me: Me }) {
     [companyId, me.companies],
   );
 
-  async function requestAccess(appKey: "finance" | "hr") {
+  async function requestAccess(appKey: "finance" | "hr" | "content") {
     if (!company) return;
-    if (appKey !== "finance" && appKey !== "hr") return;
+    if (appKey !== "finance" && appKey !== "hr" && appKey !== "content") return;
     setPendingKey(appKey);
     setMessage("");
+    const permissionKey =
+      appKey === "finance" ? "app.finance" : appKey === "hr" ? "app.hr" : "app.content";
     try {
       const res = await fetch("/v1/access/requests", {
         method: "POST",
@@ -35,7 +37,7 @@ export function LauncherClient({ me }: { me: Me }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           companyId: company.id,
-          permissionKey: appKey === "finance" ? "app.finance" : "app.hr",
+          permissionKey,
           reason: `Request ${appKey} add-on for ${company.code}`,
         }),
       });
@@ -150,7 +152,9 @@ export function LauncherClient({ me }: { me: Me }) {
                 ? `/open-finance?companyId=${encodeURIComponent(company.id)}`
                 : item.key === "hr"
                   ? `/open-hr?companyId=${encodeURIComponent(company.id)}`
-                  : `/academy?companyId=${encodeURIComponent(company.id)}`;
+                  : item.key === "content"
+                    ? `/content?companyId=${encodeURIComponent(company.id)}`
+                    : `/academy?companyId=${encodeURIComponent(company.id)}`;
             return (
               <WolfAppTile
                 key={item.key}
@@ -185,7 +189,9 @@ export function LauncherClient({ me }: { me: Me }) {
                 <WolfButton
                   variant="ghost"
                   disabled={pendingKey === item.key}
-                  onClick={() => requestAccess(item.key as "finance" | "hr")}
+                  onClick={() =>
+                    requestAccess(item.key as "finance" | "hr" | "content")
+                  }
                 >
                   {pendingKey === item.key ? "Requesting…" : "Request access"}
                 </WolfButton>

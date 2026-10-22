@@ -10,6 +10,7 @@ import { writeAdminAudit } from "../admin/audit.js";
 const APP_REQUEST_KEYS: Record<string, string> = {
   "app.finance": "finance",
   "app.hr": "hr",
+  "app.content": "content",
 };
 
 export function createAccessRequest(
@@ -109,7 +110,14 @@ export function applyAccessRequestApproval(
     const basePerms =
       appKey === "finance"
         ? ["finance.health.read", "finance.session.read", "finance.journal.read"]
-        : ["hr.session.read", "hr.employee.read", "hr.self.read", "hr.leave.request"];
+        : appKey === "content"
+          ? [
+              "content.campaign.read",
+              "content.campaign.write",
+              "content.piece.read",
+              "content.piece.write",
+            ]
+          : ["hr.session.read", "hr.employee.read", "hr.self.read", "hr.leave.request"];
     for (const permissionKey of basePerms) {
       db.prepare(
         `INSERT OR IGNORE INTO permissions (key, description, default_classification) VALUES (?, ?, 2)`,

@@ -452,4 +452,30 @@ CREATE TABLE IF NOT EXISTS expenses (
   approval_request_id TEXT,
   created_at TEXT NOT NULL
 );
+
+-- Phase 5 Content Machine (GGV-scoped)
+CREATE TABLE IF NOT EXISTS content_campaigns (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  name TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('draft','active','archived')) DEFAULT 'draft',
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS content_pieces (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  campaign_id TEXT REFERENCES content_campaigns(id),
+  title TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  body_md TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('idea','draft','review','published','archived')) DEFAULT 'idea',
+  created_by TEXT NOT NULL,
+  updated_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  published_at TEXT
+);
 `

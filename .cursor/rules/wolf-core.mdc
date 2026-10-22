@@ -1,0 +1,28 @@
+---
+description: Wolf Intelligence non-negotiables. Always apply.
+alwaysApply: true
+---
+
+Read docs/WOLF-ARCHITECTURE.md sections 0 to 3 and 12 before any task. Never contradict them.
+If a task conflicts with them, stop and ask.
+
+Hard rules:
+- Authorization happens on the server in one function, authorize(). No endpoint without it.
+  No inline role checks. Hiding UI is never security.
+- Every company-scoped table has company_id NOT NULL and an index. Use row-level security
+  where the database supports it.
+- Frontend code never connects to a database and never contains secrets.
+- Money is integer minor units plus currency code. Time is UTC. IDs are UUIDv7 for new tables.
+- Cross-module data goes through events or public service interfaces, not direct table access.
+- Sensitive reads and every change write an audit event.
+- Migrations are forward-only. Never edit one that has already been applied.
+- Never log or print business data, personal data, or secrets.
+- Use fake generated data in dev and staging. Never ask for or use production data.
+- Do not touch anything related to the owner private domain from this repo.
+
+Working style:
+- For any non-trivial task, write a short plan first and wait for approval.
+- Make small changes. One concern per commit.
+- Add or update tests with every change. Permission changes must update the authorization test matrix.
+- When something is unclear, add a note to docs/DECISIONS.md and use the documented default.
+- At the end of each task, summarize what changed, what you did not do, and any remaining risks.

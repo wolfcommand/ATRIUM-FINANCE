@@ -1,0 +1,10 @@
+.env
+.env.*
+*.pem
+*.key
+*.p12
+service-account*.json
+**/exports/**
+**/real-data/**
+*.dump
+*.bak

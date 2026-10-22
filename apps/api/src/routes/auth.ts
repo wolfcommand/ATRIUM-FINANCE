@@ -10,6 +10,8 @@ import {
   revokeSession,
 } from "../modules/identity/sessions.js";
 import { buildMe } from "../modules/identity/me.js";
+import { requirePermission } from "../modules/access/requirePermission.js";
+import { getGrantsVersion } from "../modules/access/grantsVersion.js";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -87,46 +89,53 @@ export function authRouter(): Router {
     res.json({ ok: true });
   });
 
-  router.post("/sessions/:id/revoke", (req, res) => {
-    const db = getDb();
-    const callerId = readSessionId(req);
-    const caller = callerId ? getActiveSession(db, callerId) : null;
-    if (!caller) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-    const target = db.prepare(`SELECT user_id FROM sessions WHERE id = ?`).get(req.params.id) as
-      | { user_id: string }
-      | undefined;
-    if (!target || target.user_id !== caller.user_id) {
-      res.status(403).json({ error: "forbidden" });
-      return;
-    }
-    const revoked = revokeSession(db, req.params.id);
-    if (callerId === req.params.id) clearSessionCookie(res);
-    res.json({ ok: revoked });
-  });
+  router.post(
+    "/sessions/:id/revoke",
+    requirePermission("identity.session.revoke", {
+      classification: 1,
+      resourceType: "session",
+      auditOnDeny: true,
+    }),
+    (req, res) => {
+      const db = getDb();
+      const auth = req.wolfAuth!;
+      const target = db.prepare(`SELECT user_id FROM sessions WHERE id = ?`).get(req.params.id) as
+        | { user_id: string }
+        | undefined;
+      if (!target || target.user_id !== auth.userId) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+      }
+      const revoked = revokeSession(db, req.params.id);
+      if (auth.session.id === req.params.id) clearSessionCookie(res);
+      res.json({ ok: revoked });
+    },
+  );
 
-  router.get("/me", (req, res) => {
-    const db = getDb();
-    const sessionId = readSessionId(req);
-    if (!sessionId) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-    const session = getActiveSession(db, sessionId);
-    if (!session) {
-      clearSessionCookie(res);
-      res.status(401).json({ error: "session_revoked_or_missing" });
-      return;
-    }
-    const me = buildMe(db, session);
-    if (!me) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-    res.json(me);
-  });
+  router.get(
+    "/me",
+    requirePermission("identity.me.read", {
+      classification: 1,
+      resourceType: "identity",
+      auditOnDeny: false,
+    }),
+    (req, res) => {
+      const db = getDb();
+      const auth = req.wolfAuth!;
+      const session = getActiveSession(db, auth.session.id);
+      if (!session) {
+        clearSessionCookie(res);
+        res.status(401).json({ error: "session_revoked_or_missing" });
+        return;
+      }
+      const me = buildMe(db, session);
+      if (!me) {
+        res.status(401).json({ error: "unauthorized" });
+        return;
+      }
+      res.json({ ...me, grants_version: getGrantsVersion(auth.userId) });
+    },
+  );
 
   return router;
 }

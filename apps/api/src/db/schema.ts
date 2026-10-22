@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active','suspended','disabled')),
   password_hash TEXT,
+  grants_version INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
 

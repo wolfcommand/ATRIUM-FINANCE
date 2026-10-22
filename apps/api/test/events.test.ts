@@ -5,7 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import { createApp } from "../src/app.js";
 import { resetDbForTests, setDb, getDb } from "../src/db/client.js";
-import { seedDatabase } from "../src/db/seed.js";
+import { seedDatabase, SEED_PASSWORD } from "../src/db/seed.js";
+import { SESSION_COOKIE } from "../src/modules/identity/sessions.js";
 import {
   enqueueOutboxEvent,
   relayOnce,
@@ -160,7 +161,7 @@ test("employment.ended marks finance ref ended", async () => {
   assert.equal(listEmployeeRefs(getDb())[0]!.status, "ended");
 });
 
-test("HTTP inject + relay endpoints (fake data)", async () => {
+test("HTTP inject + relay endpoints (fake data, authorize required)", async () => {
   const app = createApp();
   const server = app.listen(0);
   await new Promise<void>((r) => server.once("listening", () => r()));
@@ -168,9 +169,25 @@ test("HTTP inject + relay endpoints (fake data)", async () => {
   assert.ok(addr && typeof addr === "object");
   const base = `http://127.0.0.1:${addr.port}`;
 
-  const inject = await fetch(`${base}/v1/events/inject`, {
+  const login = await fetch(`${base}/v1/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "owner@wolf.example", password: SEED_PASSWORD }),
+  });
+  assert.equal(login.status, 200);
+  const setCookie = login.headers.getSetCookie?.() ?? [];
+  const cookie =
+    setCookie.find((c) => c.startsWith(`${SESSION_COOKIE}=`))?.split(";")[0] ??
+    String(login.headers.get("set-cookie") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .find((c) => c.startsWith(`${SESSION_COOKIE}=`))
+      ?.split(";")[0];
+  assert.ok(cookie, "owner session cookie");
+
+  const inject = await fetch(`${base}/v1/events/inject`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
     body: JSON.stringify({
       eventType: "employee.created",
       employmentId: "emp-http",
@@ -181,9 +198,12 @@ test("HTTP inject + relay endpoints (fake data)", async () => {
     }),
   });
   assert.equal(inject.status, 201);
-  const relay = await fetch(`${base}/v1/events/relay`, { method: "POST" });
+  const relay = await fetch(`${base}/v1/events/relay`, {
+    method: "POST",
+    headers: { cookie },
+  });
   assert.equal(relay.status, 200);
-  const refs = await fetch(`${base}/v1/finance/employee-refs`);
+  const refs = await fetch(`${base}/v1/finance/employee-refs`, { headers: { cookie } });
   const body = (await refs.json()) as { refs: Array<{ employment_id: string }> };
   assert.ok(body.refs.some((r) => r.employment_id === "emp-http"));
 

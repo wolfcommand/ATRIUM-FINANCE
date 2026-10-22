@@ -58,4 +58,37 @@ CREATE TABLE IF NOT EXISTS app_entitlements (
   app_key TEXT NOT NULL,
   UNIQUE (user_id, company_id, app_key)
 );
-`;
+
+CREATE TABLE IF NOT EXISTS permissions (
+  key TEXT PRIMARY KEY,
+  description TEXT NOT NULL,
+  default_classification INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS roles (
+  id TEXT PRIMARY KEY,
+  company_id TEXT,
+  name TEXT NOT NULL,
+  is_system INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role_id TEXT NOT NULL REFERENCES roles(id),
+  permission_key TEXT NOT NULL REFERENCES permissions(key),
+  PRIMARY KEY (role_id, permission_key)
+);
+
+CREATE TABLE IF NOT EXISTS grants (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  role_id TEXT REFERENCES roles(id),
+  permission_key TEXT,
+  scope_type TEXT NOT NULL CHECK (scope_type IN ('group','company','department','self')),
+  scope_id TEXT,
+  valid_from TEXT NOT NULL,
+  valid_to TEXT,
+  granted_by TEXT,
+  reason TEXT,
+  ticket_ref TEXT
+);
+`

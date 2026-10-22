@@ -74,3 +74,26 @@
 ### Risks
 - Finance still has open business APIs once a Wolf session exists — Prompt 4 adds authorize().
 - In-memory Finance sessions reset on process restart.
+
+---
+
+## Prompt 4 — shared authorize()
+
+| Item | Decision |
+|---|---|
+| Guard | `@wolf/access` `authorize()` is the only decision function |
+| Inventory | `docs/permission-inventory.md` — applied immediately (owner: continue without pauses) |
+| Finance wiring | After Wolf session middleware, `requireAuthorized` matches route → permission → grants from API |
+| Unguarded `/api/*` | HTTP 403 `unguarded_route` |
+| HR | Deferred — no HR inventory |
+
+### Changed
+- packages/access implementation + tests; API grants tables/seed; Finance middleware + auth matrix tests.
+
+### Not done
+- Removing dangerous admin routes (switch-user/mock reset) — still permission-gated only.
+- Step-up enforcement beyond obligation flags.
+
+### Risks
+- Grant cache TTL 30s — revocation lag until cache expiry or process restart.
+- Pattern-based route map may miss newly added Finance routes (CI unguarded test helps).

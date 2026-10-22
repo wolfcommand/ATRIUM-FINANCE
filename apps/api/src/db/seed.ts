@@ -130,8 +130,98 @@ export function seedDatabase(db = getDb()): void {
       for (const app of membership.apps) {
         insertEntitlement.run({ id: newId(), userId, companyId, appKey: app });
       }
+      if (membership.apps.includes("finance")) {
+        seedFinanceGrants(db, userId, companyId);
+      } else {
+        seedStaffGrants(db, userId, companyId);
+      }
     }
     n += 1;
+  }
+}
+
+const FINANCE_PERMS = [
+  "finance.health.read",
+  "finance.session.read",
+  "finance.admin.read",
+  "finance.admin.write",
+  "finance.admin.access",
+  "finance.admin.mock",
+  "finance.accounts.read",
+  "finance.accounts.write",
+  "finance.journal.read",
+  "finance.journal.write",
+  "finance.journal.approve",
+  "finance.report.read",
+  "finance.report.export",
+  "finance.controls.read",
+  "finance.ops.read",
+  "finance.ops.write",
+  "finance.config.read",
+  "finance.config.write",
+  "finance.inventory.read",
+  "finance.inventory.write",
+  "finance.arap.read",
+  "finance.arap.write",
+  "finance.service_charge.read",
+  "finance.service_charge.write",
+  "finance.owner_pool.read",
+  "finance.owner_pool.write",
+  "finance.tax.read",
+  "finance.tax.write",
+  "finance.petty_cash.read",
+  "finance.petty_cash.write",
+];
+
+const STAFF_PERMS = ["finance.health.read", "finance.session.read"];
+
+function ensurePermissions(db: ReturnType<typeof getDb>): void {
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO permissions (key, description, default_classification)
+     VALUES (?, ?, 2)`,
+  );
+  for (const key of FINANCE_PERMS) {
+    insert.run(key, key);
+  }
+}
+
+function seedFinanceGrants(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  companyId: string,
+): void {
+  ensurePermissions(db);
+  const insert = db.prepare(
+    `INSERT INTO grants (id, user_id, role_id, permission_key, scope_type, scope_id, valid_from, valid_to, granted_by, reason, ticket_ref)
+     VALUES (@id, @userId, NULL, @permissionKey, 'company', @companyId, '2024-01-01', NULL, 'seed', 'fake finance add-on', NULL)`,
+  );
+  for (const permissionKey of FINANCE_PERMS) {
+    const exists = db
+      .prepare(
+        `SELECT 1 AS ok FROM grants WHERE user_id = ? AND permission_key = ? AND scope_id = ?`,
+      )
+      .get(userId, permissionKey, companyId);
+    if (!exists) insert.run({ id: newId(), userId, permissionKey, companyId });
+  }
+}
+
+function seedStaffGrants(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  companyId: string,
+): void {
+  ensurePermissions(db);
+  const insert = db.prepare(
+    `INSERT INTO grants (id, user_id, role_id, permission_key, scope_type, scope_id, valid_from, valid_to, granted_by, reason, ticket_ref)
+     VALUES (@id, @userId, NULL, @permissionKey, 'company', @companyId, '2024-01-01', NULL, 'seed', 'fake staff base', NULL)`,
+  );
+  for (const permissionKey of STAFF_PERMS) {
+    const exists = db
+      .prepare(
+        `SELECT 1 AS ok FROM grants WHERE user_id = ? AND permission_key = ? AND scope_id = ?`,
+      )
+      .get(userId, permissionKey, companyId);
+    if (!exists) insert.run({ id: newId(), userId, permissionKey, companyId });
   }
 }
 

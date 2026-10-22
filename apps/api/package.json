@@ -12,6 +12,7 @@
     "seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
+    "@wolf/access": "workspace:^",
     "better-sqlite3": "^11.9.1",
     "cookie": "^1.0.2",
     "cors": "^2.8.5",

@@ -11,9 +11,11 @@
   "scripts": {
     "build": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "node -e \"console.log('no tests yet')\""
+    "test": "tsx --test src/**/*.test.ts"
   },
   "devDependencies": {
+    "@types/node": "^22.14.0",
+    "tsx": "^4.21.0",
     "typescript": "~5.8.2"
   }
 }

@@ -23,6 +23,7 @@ import {
   setFinanceSessionCookie,
 } from './server/wolfAuth';
 import { requireAuthorized } from './server/authorizeMiddleware';
+import { writeAudit } from './server/auditLog';
 
 dotenv.config();
 
@@ -97,6 +98,13 @@ async function startServer() {
 
   app.use(requireWolfSession);
   app.use(requireAuthorized);
+
+  // Prompt 5: bind journal DAL to Wolf session company for every request
+  app.use((req, _res, next) => {
+    const session = getFinanceSession(req);
+    store.currentCompanyId = session?.companyId ?? null;
+    next();
+  });
 
   // Google Sheets Connection Status
   app.get('/api/status', (req, res) => {
@@ -514,6 +522,16 @@ async function startServer() {
 
   // --- JOURNAL WORKBENCH & WORKFLOW ---
 
+  function auditActor(req: express.Request) {
+    const session = getFinanceSession(req);
+    return {
+      actorUserId: session?.userId ?? null,
+      sessionId: session?.wolfSessionId ?? null,
+      companyId: session?.companyId ?? store.currentCompanyId,
+      requestId: (req.headers['x-request-id'] as string) || null,
+    };
+  }
+
   app.get('/api/journals', (req, res) => {
     res.json(store.getJournals());
   });
@@ -531,6 +549,14 @@ async function startServer() {
     try {
       const { header, lines } = req.body;
       const journal = await store.createJournal(header, lines);
+      writeAudit({
+        ...auditActor(req),
+        action: 'finance.journal.create',
+        resourceType: 'journal',
+        resourceId: journal.journal_id,
+        outcome: 'allow',
+        changes: { status: journal.status, company_id: journal.company_id },
+      });
       res.json(journal);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -541,17 +567,37 @@ async function startServer() {
   app.post('/api/journals/:id/validate', async (req, res) => {
     try {
       const validated = await store.validateJournal(req.params.id);
+      writeAudit({
+        ...auditActor(req),
+        action: 'finance.journal.update',
+        resourceType: 'journal',
+        resourceId: validated.journal_id,
+        outcome: 'allow',
+        changes: { status: validated.status },
+      });
       res.json(validated);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
   });
 
-  // Approve step
+  // Approve step — policy snapshot applied in store.approveJournal
   app.post('/api/journals/:id/approve', async (req, res) => {
     try {
       const approver = req.body.approver || 'Zayen (Controller)';
       const approved = await store.approveJournal(req.params.id, approver);
+      writeAudit({
+        ...auditActor(req),
+        action: 'finance.journal.approve',
+        resourceType: 'journal',
+        resourceId: approved.journal_id,
+        outcome: 'allow',
+        changes: {
+          status: approved.status,
+          approved_by: approved.approved_by,
+          approval_snapshot: approved.approval_snapshot ?? null,
+        },
+      });
       res.json(approved);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -563,6 +609,14 @@ async function startServer() {
     try {
       const { autoApprove, approver } = req.body || {};
       const posted = await store.postJournal(req.params.id, { autoApprove, approver });
+      writeAudit({
+        ...auditActor(req),
+        action: 'finance.journal.update',
+        resourceType: 'journal',
+        resourceId: posted.journal_id,
+        outcome: 'allow',
+        changes: { status: posted.status, posted_at: posted.posted_at },
+      });
       res.json(posted);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -574,6 +628,17 @@ async function startServer() {
     try {
       const { reversalDate } = req.body;
       const result = await store.reverseJournal(req.params.id, reversalDate);
+      writeAudit({
+        ...auditActor(req),
+        action: 'finance.journal.update',
+        resourceType: 'journal',
+        resourceId: req.params.id,
+        outcome: 'allow',
+        changes: {
+          reversed: true,
+          reversal_id: result.reversal.journal_id,
+        },
+      });
       res.json(result);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -584,6 +649,14 @@ async function startServer() {
   app.delete('/api/journals/:id', async (req, res) => {
     try {
       await store.deleteDraftJournal(req.params.id);
+      writeAudit({
+        ...auditActor(req),
+        action: 'finance.journal.delete',
+        resourceType: 'journal',
+        resourceId: req.params.id,
+        outcome: 'allow',
+        changes: null,
+      });
       res.json({ success: true });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -622,6 +695,20 @@ async function startServer() {
   // --- REUSABLE REPORT ENGINE ROUTES ---
 
   // Financial Statements (Balance Sheet & Income Statement)
+  // Report reads that feed exports — audit as export when client requests download flavor
+  app.post('/api/reports/export', (req, res) => {
+    const kind = String(req.body?.kind || 'financial-statements');
+    writeAudit({
+      ...auditActor(req),
+      action: 'finance.report.export',
+      resourceType: 'report',
+      resourceId: kind,
+      outcome: 'allow',
+      changes: { format: req.body?.format || 'csv' },
+    });
+    res.json({ ok: true, kind, stub: true });
+  });
+
   app.get('/api/reports/financial-statements', (req, res) => {
     const { period } = req.query;
     const rep = store.getFinancialStatements(period ? String(period) : undefined);

@@ -37,6 +37,17 @@ export interface JournalHeader {
   approved_by: string;
   posted_at: string;
   reversal_of: string;
+  /** Wolf company scope (Prompt 5). Backfilled for legacy rows. */
+  company_id?: string;
+  /** Integer minor-unit snapshot of total debit (Prompt 5 money). */
+  total_debit_minor?: number;
+  currency?: string;
+  /** Approval policy snapshot (Prompt 5). */
+  approval_snapshot?: {
+    policyId: string;
+    policyVersion: number;
+    snapshotAt: string;
+  };
 }
 
 export interface JournalLine {

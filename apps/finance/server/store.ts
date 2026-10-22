@@ -74,10 +74,22 @@ export class AccountingStore {
   public roles: Map<string, UserRoleDefinition> = new Map();
   public users: Map<string, SystemUser> = new Map();
   public currentUserId: string = 'usr-controller-1';
+  /** Active Wolf company for request-scoped isolation (Prompt 5). */
+  public currentCompanyId: string | null = null;
+  /** Fake backfill company until an owner mapping is provided. */
+  public defaultCompanyId: string = process.env.WOLF_DEFAULT_COMPANY_ID || 'company-amg-fake';
 
   constructor() {
     this.sheetsClient = new GoogleSheetsClient();
     this.initDefaultAccessControl();
+  }
+
+  public ensureJournalCompanyIds(): void {
+    for (const [id, header] of this.journalHeaders.entries()) {
+      if (!header.company_id) {
+        this.journalHeaders.set(id, { ...header, company_id: this.defaultCompanyId, currency: 'IDR' });
+      }
+    }
   }
 
   // Seed standard hotel roles and initial users
@@ -731,9 +743,12 @@ export class AccountingStore {
 
   // --- JOURNAL MANAGEMENT & WORKFLOW ---
   public getJournals(): JournalWithLines[] {
+    this.ensureJournalCompanyIds();
     const result: JournalWithLines[] = [];
+    const companyId = this.currentCompanyId;
 
     for (const header of this.journalHeaders.values()) {
+      if (companyId && header.company_id && header.company_id !== companyId) continue;
       const lines = this.journalLines.filter((l) => l.journal_id === header.journal_id);
       const total_debit = lines.reduce((sum, l) => sum + (l.debit || 0), 0);
       const total_credit = lines.reduce((sum, l) => sum + (l.credit || 0), 0);
@@ -758,8 +773,16 @@ export class AccountingStore {
   }
 
   public getJournalById(journalId: string): JournalWithLines | null {
+    this.ensureJournalCompanyIds();
     const header = this.journalHeaders.get(journalId);
     if (!header) return null;
+    if (
+      this.currentCompanyId &&
+      header.company_id &&
+      header.company_id !== this.currentCompanyId
+    ) {
+      return null;
+    }
 
     const lines = this.journalLines.filter((l) => l.journal_id === journalId);
     const total_debit = lines.reduce((sum, l) => sum + (l.debit || 0), 0);
@@ -797,6 +820,17 @@ export class AccountingStore {
       );
     }
 
+    const lines: JournalLine[] = linesData.map((line, idx) => ({
+      journal_id,
+      line_no: idx + 1,
+      account_code: line.account_code,
+      department_code: line.department_code || '',
+      debit: Math.round((line.debit || 0) * 100) / 100,
+      credit: Math.round((line.credit || 0) * 100) / 100,
+      description: line.description || '',
+    }));
+    const totalDebit = lines.reduce((s, l) => s + (l.debit || 0), 0);
+
     const header: JournalHeader = {
       journal_id,
       journal_date: headerData.journal_date,
@@ -808,17 +842,10 @@ export class AccountingStore {
       approved_by: '',
       posted_at: '',
       reversal_of: headerData.reversal_of || '',
+      company_id: this.currentCompanyId || this.defaultCompanyId,
+      currency: 'IDR',
+      total_debit_minor: Math.round(totalDebit * 100),
     };
-
-    const lines: JournalLine[] = linesData.map((line, idx) => ({
-      journal_id,
-      line_no: idx + 1,
-      account_code: line.account_code,
-      department_code: line.department_code || '',
-      debit: Math.round((line.debit || 0) * 100) / 100,
-      credit: Math.round((line.credit || 0) * 100) / 100,
-      description: line.description || '',
-    }));
 
     this.journalHeaders.set(journal_id, header);
     this.journalLines.push(...lines);
@@ -866,8 +893,9 @@ export class AccountingStore {
     return this.getJournalById(journalId)!;
   }
 
-  // Approve workflow step
+  // Approve workflow step — resolves configurable policy (default = single approver)
   public async approveJournal(journalId: string, approverName: string = 'Zayen (Controller)'): Promise<JournalWithLines> {
+    const { resolvePolicy } = await import('./approvalPolicy.js');
     const journal = this.getJournalById(journalId);
     if (!journal) throw new Error(`Journal ${journalId} not found`);
 
@@ -875,10 +903,25 @@ export class AccountingStore {
       throw new Error(`Journal must be in VALIDATED status before Approval. Current status: ${journal.status}`);
     }
 
+    const companyId = journal.company_id || this.currentCompanyId || this.defaultCompanyId;
+    const snapshot = resolvePolicy(
+      companyId,
+      'finance.journal',
+      journal.total_debit_minor ?? Math.round(journal.total_debit * 100),
+    );
+    if (!snapshot.steps.length) {
+      throw new Error('Approval policy has no applicable steps for this journal.');
+    }
+
     const updatedHeader: JournalHeader = {
       ...this.journalHeaders.get(journalId)!,
       status: 'APPROVED',
       approved_by: approverName,
+      approval_snapshot: {
+        policyId: snapshot.policyId,
+        policyVersion: snapshot.policyVersion,
+        snapshotAt: snapshot.snapshotAt,
+      },
     };
     this.journalHeaders.set(journalId, updatedHeader);
 
@@ -1019,13 +1062,13 @@ export class AccountingStore {
     };
   }
 
-  // Delete draft journal only
+  // Delete draft journal only (company-scoped)
   public async deleteDraftJournal(journalId: string): Promise<void> {
-    const header = this.journalHeaders.get(journalId);
-    if (!header) throw new Error(`Journal ${journalId} not found`);
+    const journal = this.getJournalById(journalId);
+    if (!journal) throw new Error(`Journal ${journalId} not found`);
 
-    if (header.status !== 'DRAFT') {
-      throw new Error(`Only DRAFT journals can be deleted. Journal ${journalId} is in ${header.status} status.`);
+    if (journal.status !== 'DRAFT') {
+      throw new Error(`Only DRAFT journals can be deleted. Journal ${journalId} is in ${journal.status} status.`);
     }
 
     this.journalHeaders.delete(journalId);

@@ -97,3 +97,25 @@
 ### Risks
 - Grant cache TTL 30s — revocation lag until cache expiry or process restart.
 - Pattern-based route map may miss newly added Finance routes (CI unguarded test helps).
+
+---
+
+## Prompt 5 — Finance adjustments
+
+| Item | Decision |
+|---|---|
+| Company scoping | Journal headers carry `company_id`; DAL filters via `store.currentCompanyId` set from Wolf session middleware. Legacy rows backfilled to `WOLF_DEFAULT_COMPANY_ID` / `company-amg-fake` until owner mapping provided. |
+| Money | Journal snapshots `total_debit_minor` + `currency=IDR` (scale 100). Float line amounts retained for UI compatibility; `scripts/reconcile-money.ts` checks round-trip on fake data. Full float→minor migration of all amount columns deferred (Sheets + Maps store). |
+| Audit | Append-only JSONL + in-memory `writeAudit` on journal create/update/delete/approve and report export stub. |
+| Approvals | `resolvePolicy()` default `finance.journal` = single `role:approver` step; snapshot stored on journal header at approve. |
+| HR / other tables | Not company-scoped in this prompt beyond journals (highest-risk money path). |
+
+### Changed
+- company middleware, money helpers, audit log, approval policy, reconcile script, isolation/audit/policy tests.
+
+### Not done
+- RLS (SQLite/Sheets — N/A); full amount-column migration; company_id on revenue/AP/AR/inventory tables; Postgres audit store.
+
+### Risks
+- Non-journal Finance tables still lack company filters — isolation incomplete for those modules.
+- Default company backfill assumes all legacy data is AMG until mapping arrives.

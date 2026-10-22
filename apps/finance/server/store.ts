@@ -33,9 +33,24 @@ import {
   AccessControlState,
 } from '../src/types';
 import { GoogleSheetsClient, REQUIRED_TABS } from './sheets';
+import { normalizeMoneyLine, reconcileJournalLines, type ReconcileReport } from './money';
+import { evaluateJournalApproval } from './approvalPolicy';
+import { DEFAULT_BACKFILL_COMPANY_CODE } from './companyScope';
 
 export class AccountingStore {
   public sheetsClient: GoogleSheetsClient;
+
+  /**
+   * Default company for legacy/seed journals until a Wolf session stamps company_id.
+   * Overridden in tests / boot via setDefaultCompanyId (maps to AMG by convention).
+   */
+  public defaultCompanyId: string =
+    process.env.WOLF_FINANCE_DEFAULT_COMPANY_ID || `seed-${DEFAULT_BACKFILL_COMPANY_CODE.toLowerCase()}`;
+
+  public setDefaultCompanyId(companyId: string): void {
+    this.defaultCompanyId = companyId;
+    this.backfillJournalScoping();
+  }
 
   // Persistent mock data status flag
   public isMockDataCleared: boolean = false;
@@ -427,6 +442,8 @@ export class AccountingStore {
 
       const header: JournalHeader = {
         journal_id: b.journal_id,
+        company_id: this.defaultCompanyId,
+        currency: this.systemSettings.base_currency || 'IDR',
         journal_date: b.date,
         period: b.period,
         source_type: 'REVENUE',
@@ -435,13 +452,14 @@ export class AccountingStore {
         approved_by: 'Financial Controller',
         status: 'POSTED',
         posted_at: `${b.date}T23:59:59.000Z`,
-        reversal_of: null,
+        reversal_of: '',
       };
 
       this.journalHeaders.set(b.journal_id, header);
       for (const l of lines) {
-        this.journalLines.push(l);
+        this.journalLines.push(l as JournalLine);
       }
+      this.backfillJournalScoping();
 
       this.revenueTransactions.set(b.txId, {
         transaction_id: b.txId,
@@ -498,6 +516,10 @@ export class AccountingStore {
         if (row.journal_id) {
           this.journalHeaders.set(String(row.journal_id).trim(), {
             journal_id: String(row.journal_id).trim(),
+            company_id: String(row.company_id || this.defaultCompanyId).trim(),
+            currency: String(row.currency || this.systemSettings.base_currency || 'IDR')
+              .trim()
+              .toUpperCase(),
             journal_date: String(row.journal_date || '').trim(),
             period: String(row.period || '').trim(),
             status: (row.status || 'DRAFT') as any,
@@ -523,10 +545,14 @@ export class AccountingStore {
             department_code: String(row.department_code || '').trim(),
             debit: parseFloat(row.debit) || 0,
             credit: parseFloat(row.credit) || 0,
+            debit_minor: row.debit_minor !== undefined ? Number(row.debit_minor) : undefined,
+            credit_minor: row.credit_minor !== undefined ? Number(row.credit_minor) : undefined,
+            currency: String(row.currency || '').trim() || undefined,
             description: String(row.description || '').trim(),
-          });
+          } as JournalLine);
         }
       }
+      this.backfillJournalScoping();
 
       // 5. Revenue Transactions
       const rawRev = await this.sheetsClient.readTab('revenue_transactions');
@@ -730,10 +756,44 @@ export class AccountingStore {
   }
 
   // --- JOURNAL MANAGEMENT & WORKFLOW ---
-  public getJournals(): JournalWithLines[] {
+
+  /** Backfill company_id + minor-unit money on any legacy/seed journal rows. */
+  public backfillJournalScoping(companyId = this.defaultCompanyId): void {
+    const currency = this.systemSettings.base_currency || 'IDR';
+    for (const [id, header] of this.journalHeaders.entries()) {
+      const next: JournalHeader = {
+        ...header,
+        company_id: header.company_id || companyId,
+        currency: header.currency || currency,
+        reversal_of: header.reversal_of || '',
+      };
+      this.journalHeaders.set(id, next);
+    }
+    this.journalLines = this.journalLines.map((line) => {
+      const money = normalizeMoneyLine(line, currency);
+      return {
+        ...line,
+        ...money,
+      };
+    });
+  }
+
+  public reconcileJournalMoney(): ReconcileReport {
+    this.backfillJournalScoping();
+    const journals = this.getJournals().map((j) => ({
+      journal_id: j.journal_id,
+      currency: j.currency || this.systemSettings.base_currency || 'IDR',
+      lines: j.lines,
+    }));
+    return reconcileJournalLines(journals);
+  }
+
+  public getJournals(companyId?: string): JournalWithLines[] {
+    this.backfillJournalScoping();
     const result: JournalWithLines[] = [];
 
     for (const header of this.journalHeaders.values()) {
+      if (companyId && header.company_id !== companyId) continue;
       const lines = this.journalLines.filter((l) => l.journal_id === header.journal_id);
       const total_debit = lines.reduce((sum, l) => sum + (l.debit || 0), 0);
       const total_credit = lines.reduce((sum, l) => sum + (l.credit || 0), 0);
@@ -757,9 +817,11 @@ export class AccountingStore {
     });
   }
 
-  public getJournalById(journalId: string): JournalWithLines | null {
+  public getJournalById(journalId: string, companyId?: string): JournalWithLines | null {
+    this.backfillJournalScoping();
     const header = this.journalHeaders.get(journalId);
     if (!header) return null;
+    if (companyId && header.company_id !== companyId) return null;
 
     const lines = this.journalLines.filter((l) => l.journal_id === journalId);
     const total_debit = lines.reduce((sum, l) => sum + (l.debit || 0), 0);
@@ -780,8 +842,16 @@ export class AccountingStore {
       journal_id?: string;
       status?: 'DRAFT';
       reversal_of?: string;
+      company_id?: string;
+      currency?: string;
     },
-    linesData: Omit<JournalLine, 'journal_id' | 'line_no'>[]
+    linesData: Array<
+      Omit<JournalLine, 'journal_id' | 'line_no' | 'debit_minor' | 'credit_minor' | 'currency'> & {
+        debit_minor?: number;
+        credit_minor?: number;
+        currency?: string;
+      }
+    >
   ): Promise<JournalWithLines> {
     const journal_id =
       headerData.journal_id ||
@@ -797,8 +867,13 @@ export class AccountingStore {
       );
     }
 
+    const currency = (headerData.currency || this.systemSettings.base_currency || 'IDR').toUpperCase();
+    const company_id = headerData.company_id || this.defaultCompanyId;
+
     const header: JournalHeader = {
       journal_id,
+      company_id,
+      currency,
       journal_date: headerData.journal_date,
       period: headerData.period || headerData.journal_date.substring(0, 7),
       status: 'DRAFT',
@@ -810,15 +885,17 @@ export class AccountingStore {
       reversal_of: headerData.reversal_of || '',
     };
 
-    const lines: JournalLine[] = linesData.map((line, idx) => ({
-      journal_id,
-      line_no: idx + 1,
-      account_code: line.account_code,
-      department_code: line.department_code || '',
-      debit: Math.round((line.debit || 0) * 100) / 100,
-      credit: Math.round((line.credit || 0) * 100) / 100,
-      description: line.description || '',
-    }));
+    const lines: JournalLine[] = linesData.map((line, idx) => {
+      const money = normalizeMoneyLine(line, currency);
+      return {
+        journal_id,
+        line_no: idx + 1,
+        account_code: line.account_code,
+        department_code: line.department_code || '',
+        description: line.description || '',
+        ...money,
+      };
+    });
 
     this.journalHeaders.set(journal_id, header);
     this.journalLines.push(...lines);
@@ -866,19 +943,35 @@ export class AccountingStore {
     return this.getJournalById(journalId)!;
   }
 
-  // Approve workflow step
-  public async approveJournal(journalId: string, approverName: string = 'Zayen (Controller)'): Promise<JournalWithLines> {
-    const journal = this.getJournalById(journalId);
+  // Approve workflow step — goes through configurable approval policy (default = prior behavior)
+  public async approveJournal(
+    journalId: string,
+    approverName: string = 'Zayen (Controller)',
+    options?: { companyId?: string }
+  ): Promise<JournalWithLines> {
+    const journal = this.getJournalById(journalId, options?.companyId);
     if (!journal) throw new Error(`Journal ${journalId} not found`);
 
-    if (journal.status !== 'VALIDATED') {
-      throw new Error(`Journal must be in VALIDATED status before Approval. Current status: ${journal.status}`);
+    const decision = evaluateJournalApproval({
+      companyId: journal.company_id,
+      requestType: 'finance.journal.approve',
+      subjectStatus: journal.status,
+      approverName,
+    });
+    if (!decision.allow) {
+      throw new Error(decision.reason);
     }
 
     const updatedHeader: JournalHeader = {
       ...this.journalHeaders.get(journalId)!,
       status: 'APPROVED',
-      approved_by: approverName,
+      approved_by: decision.approverName,
+      approval_policy_snapshot: {
+        policy_id: decision.snapshot.policy_id,
+        policy_version: decision.snapshot.policy_version,
+        request_type: decision.snapshot.request_type,
+        snapshotted_at: decision.snapshot.snapshotted_at,
+      },
     };
     this.journalHeaders.set(journalId, updatedHeader);
 

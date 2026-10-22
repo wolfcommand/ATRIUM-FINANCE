@@ -28,6 +28,10 @@ export type SourceType = 'REVENUE' | 'SPENDING' | 'MANUAL' | 'REVERSAL' | 'AR_SE
 
 export interface JournalHeader {
   journal_id: string;
+  /** Wolf company workspace — required for isolation (Prompt 5) */
+  company_id: string;
+  /** ISO 4217 currency for all lines on this journal */
+  currency: string;
   journal_date: string; // YYYY-MM-DD
   period: string; // YYYY-MM
   status: JournalStatus;
@@ -37,6 +41,13 @@ export interface JournalHeader {
   approved_by: string;
   posted_at: string;
   reversal_of: string;
+  /** Snapshot of approval policy used when approved (architecture §9.5) */
+  approval_policy_snapshot?: {
+    policy_id: string;
+    policy_version: number;
+    request_type: string;
+    snapshotted_at: string;
+  };
 }
 
 export interface JournalLine {
@@ -44,8 +55,13 @@ export interface JournalLine {
   line_no: number;
   account_code: string;
   department_code: string;
+  /** Major units (derived from debit_minor for UI / Sheets) */
   debit: number;
   credit: number;
+  /** Integer minor units — source of truth for money */
+  debit_minor: number;
+  credit_minor: number;
+  currency: string;
   description: string;
 }
 

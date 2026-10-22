@@ -97,3 +97,30 @@
 ### Risks
 - Grant cache TTL 30s — revocation lag until cache expiry or process restart.
 - Pattern-based route map may miss newly added Finance routes (CI unguarded test helps).
+
+---
+
+## Prompt 5 — Finance adjustments (journals)
+
+| Item | Decision |
+|---|---|
+| Company scoping | Journal headers carry `company_id` from Wolf session; list/get/mutate filter by session company. Cross-company reads return 404. |
+| Backfill mapping | Pre-scoped / seed journals → `WOLF_FINANCE_DEFAULT_COMPANY_ID` or `seed-amg` (AMG Finance provenance). Owner can remap later. |
+| Money | Journal lines store `debit_minor` / `credit_minor` (integer) + `currency`; major `debit`/`credit` derived for UI/Sheets. Helpers in `server/money.ts`. |
+| Reconcile | `pnpm --filter @wolf/finance reconcile:money` + `GET /api/admin/reconcile-journal-money`; counts/totals before=after on idempotent backfill. |
+| Audit | Append-only in-memory `auditLog` for journal create/update/delete/approve/export. No update/delete API. |
+| Approvals | `approvalPolicy.ts` — default `finance.journal.approve` = single finance_controller step (prior hard-coded behavior). Snapshot stored on approve. |
+| RLS | Not applied — Finance still in-memory/Sheets (D9). App-layer isolation only until Postgres absorb. |
+| Other modules | Inventory/AR/etc. amounts not migrated in this prompt; journals only. |
+
+### Changed
+- Company-scoped journal APIs; money helpers + reconcile; audit events; approval policy; tests in `src/prompt5.test.ts`.
+
+### Not done
+- Full-table `company_id` on inventory/tax/owner-pool/etc.
+- Postgres RLS; migrating non-journal money fields.
+- HR Prompt 6.
+
+### Risks
+- Internal `createJournal` callers without session still stamp `defaultCompanyId`.
+- Audit log is process-local (lost on restart) until core audit module lands in `apps/api`.

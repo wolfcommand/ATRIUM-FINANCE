@@ -21,8 +21,35 @@ import {
   getFinanceSession,
   requireWolfSession,
   setFinanceSessionCookie,
+  type FinanceSession,
 } from './server/wolfAuth';
 import { requireAuthorized } from './server/authorizeMiddleware';
+import { appendAuditEvent, listAuditEvents } from './server/auditLog';
+
+function wolfSession(req: express.Request): FinanceSession {
+  return (req as express.Request & { wolfSession: FinanceSession }).wolfSession;
+}
+
+function auditJournal(
+  req: express.Request,
+  action: string,
+  resourceId: string | null,
+  changes: Record<string, unknown> | null = null,
+  outcome: 'allow' | 'deny' = 'allow',
+) {
+  const session = getFinanceSession(req);
+  appendAuditEvent({
+    actor_user_id: session?.userId ?? null,
+    session_id: session?.id ?? null,
+    company_id: session?.companyId ?? null,
+    action,
+    resource_type: 'finance.journal',
+    resource_id: resourceId,
+    outcome,
+    request_id: null,
+    changes,
+  });
+}
 
 dotenv.config();
 
@@ -515,11 +542,13 @@ async function startServer() {
   // --- JOURNAL WORKBENCH & WORKFLOW ---
 
   app.get('/api/journals', (req, res) => {
-    res.json(store.getJournals());
+    const session = wolfSession(req);
+    res.json(store.getJournals(session.companyId));
   });
 
   app.get('/api/journals/:id', (req, res) => {
-    const journal = store.getJournalById(req.params.id);
+    const session = wolfSession(req);
+    const journal = store.getJournalById(req.params.id, session.companyId);
     if (!journal) {
       return res.status(404).json({ error: 'Journal not found' });
     }
@@ -529,8 +558,16 @@ async function startServer() {
   // Create manual journal
   app.post('/api/journals', async (req, res) => {
     try {
+      const session = wolfSession(req);
       const { header, lines } = req.body;
-      const journal = await store.createJournal(header, lines);
+      const journal = await store.createJournal(
+        { ...header, company_id: session.companyId },
+        lines,
+      );
+      auditJournal(req, 'finance.journal.create', journal.journal_id, {
+        status: journal.status,
+        currency: journal.currency,
+      });
       res.json(journal);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -540,7 +577,14 @@ async function startServer() {
   // Validate step
   app.post('/api/journals/:id/validate', async (req, res) => {
     try {
+      const session = wolfSession(req);
+      const existing = store.getJournalById(req.params.id, session.companyId);
+      if (!existing) return res.status(404).json({ error: 'Journal not found' });
       const validated = await store.validateJournal(req.params.id);
+      auditJournal(req, 'finance.journal.update', validated.journal_id, {
+        from_status: existing.status,
+        to_status: validated.status,
+      });
       res.json(validated);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -550,8 +594,17 @@ async function startServer() {
   // Approve step
   app.post('/api/journals/:id/approve', async (req, res) => {
     try {
+      const session = wolfSession(req);
+      const existing = store.getJournalById(req.params.id, session.companyId);
+      if (!existing) return res.status(404).json({ error: 'Journal not found' });
       const approver = req.body.approver || 'Zayen (Controller)';
-      const approved = await store.approveJournal(req.params.id, approver);
+      const approved = await store.approveJournal(req.params.id, approver, {
+        companyId: session.companyId,
+      });
+      auditJournal(req, 'finance.journal.approve', approved.journal_id, {
+        approved_by: approved.approved_by,
+        policy: approved.approval_policy_snapshot ?? null,
+      });
       res.json(approved);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -561,8 +614,15 @@ async function startServer() {
   // Post step (locks journal)
   app.post('/api/journals/:id/post', async (req, res) => {
     try {
+      const session = wolfSession(req);
+      const existing = store.getJournalById(req.params.id, session.companyId);
+      if (!existing) return res.status(404).json({ error: 'Journal not found' });
       const { autoApprove, approver } = req.body || {};
       const posted = await store.postJournal(req.params.id, { autoApprove, approver });
+      auditJournal(req, 'finance.journal.update', posted.journal_id, {
+        from_status: existing.status,
+        to_status: posted.status,
+      });
       res.json(posted);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -572,8 +632,15 @@ async function startServer() {
   // Reverse step (creates offsetting journal)
   app.post('/api/journals/:id/reverse', async (req, res) => {
     try {
+      const session = wolfSession(req);
+      const existing = store.getJournalById(req.params.id, session.companyId);
+      if (!existing) return res.status(404).json({ error: 'Journal not found' });
       const { reversalDate } = req.body;
       const result = await store.reverseJournal(req.params.id, reversalDate);
+      auditJournal(req, 'finance.journal.update', existing.journal_id, {
+        action: 'reverse',
+        reversal_id: result.reversal.journal_id,
+      });
       res.json(result);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -583,11 +650,45 @@ async function startServer() {
   // Delete draft journal
   app.delete('/api/journals/:id', async (req, res) => {
     try {
+      const session = wolfSession(req);
+      const existing = store.getJournalById(req.params.id, session.companyId);
+      if (!existing) return res.status(404).json({ error: 'Journal not found' });
       await store.deleteDraftJournal(req.params.id);
+      auditJournal(req, 'finance.journal.delete', existing.journal_id, {
+        status: existing.status,
+      });
       res.json({ success: true });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
+  });
+
+  // Client-side report/journal exports call this so audit has an export trail
+  app.post('/api/journals/export', (req, res) => {
+    const session = wolfSession(req);
+    const format = String(req.body?.format || 'csv');
+    const journalIds = Array.isArray(req.body?.journal_ids) ? req.body.journal_ids : [];
+    auditJournal(req, 'finance.journal.export', null, {
+      format,
+      journal_ids: journalIds,
+      company_id: session.companyId,
+    });
+    res.json({ ok: true });
+  });
+
+  app.get('/api/audit/events', (req, res) => {
+    const session = wolfSession(req);
+    res.json(
+      listAuditEvents({
+        company_id: session.companyId,
+        resource_type: req.query.resource_type ? String(req.query.resource_type) : undefined,
+        action: req.query.action ? String(req.query.action) : undefined,
+      }),
+    );
+  });
+
+  app.get('/api/admin/reconcile-journal-money', (_req, res) => {
+    res.json(store.reconcileJournalMoney());
   });
 
   // --- GENERAL LEDGER ---

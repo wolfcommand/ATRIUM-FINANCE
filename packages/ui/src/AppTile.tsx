@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { wolfTokens as t } from "./tokens.js";
+import { wolfTokens as t } from "./tokens";
 
 export function WolfAppTile(props: {
   title: string;

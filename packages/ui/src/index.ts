@@ -1,5 +1,5 @@
-export { wolfTokens } from "./tokens.js";
-export type { WolfTokens } from "./tokens.js";
-export { WolfShell } from "./Shell.js";
-export { WolfButton } from "./Button.js";
-export { WolfAppTile } from "./AppTile.js";
+export { wolfTokens } from "./tokens";
+export type { WolfTokens } from "./tokens";
+export { WolfShell } from "./Shell";
+export { WolfButton } from "./Button";
+export { WolfAppTile } from "./AppTile";

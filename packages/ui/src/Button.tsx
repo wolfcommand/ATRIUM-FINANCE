@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, CSSProperties } from "react";
-import { wolfTokens as t } from "./tokens.js";
+import { wolfTokens as t } from "./tokens";
 
 type Variant = "primary" | "ghost" | "danger";
 

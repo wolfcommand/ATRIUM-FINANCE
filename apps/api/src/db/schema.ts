@@ -391,4 +391,65 @@ CREATE TABLE IF NOT EXISTS academy_consumer_processed (
   processed_at TEXT NOT NULL,
   PRIMARY KEY (idempotency_key, consumer)
 );
+
+-- Phase 4 core approvals (architecture §9.5)
+CREATE TABLE IF NOT EXISTS approval_policies (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  request_type TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  valid_from TEXT NOT NULL,
+  valid_to TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE (company_id, request_type, version)
+);
+
+CREATE TABLE IF NOT EXISTS approval_policy_steps (
+  id TEXT PRIMARY KEY,
+  policy_id TEXT NOT NULL REFERENCES approval_policies(id),
+  step_no INTEGER NOT NULL,
+  approver_rule TEXT NOT NULL,
+  amount_threshold_minor INTEGER,
+  UNIQUE (policy_id, step_no)
+);
+
+CREATE TABLE IF NOT EXISTS approval_requests (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  request_type TEXT NOT NULL,
+  subject_id TEXT NOT NULL,
+  requester_user_id TEXT NOT NULL REFERENCES users(id),
+  policy_id TEXT NOT NULL,
+  policy_version INTEGER NOT NULL,
+  chain_snapshot TEXT NOT NULL,
+  amount_minor INTEGER,
+  currency TEXT,
+  status TEXT NOT NULL CHECK (status IN ('pending','approved','denied','cancelled')) DEFAULT 'pending',
+  current_step INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  decided_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS approval_steps (
+  id TEXT PRIMARY KEY,
+  request_id TEXT NOT NULL REFERENCES approval_requests(id),
+  step_no INTEGER NOT NULL,
+  approver_user_id TEXT,
+  status TEXT NOT NULL CHECK (status IN ('waiting','approved','denied','skipped')) DEFAULT 'waiting',
+  decided_at TEXT,
+  comment TEXT,
+  UNIQUE (request_id, step_no)
+);
+
+CREATE TABLE IF NOT EXISTS expenses (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  requester_user_id TEXT NOT NULL REFERENCES users(id),
+  amount_minor INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  description TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('draft','submitted','approved','denied')) DEFAULT 'draft',
+  approval_request_id TEXT,
+  created_at TEXT NOT NULL
+);
 `

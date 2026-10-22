@@ -6,6 +6,7 @@ import { ensureDemoOrg } from "../modules/hr/org.js";
 import { setPayrollPolicy } from "../modules/hr/payroll.js";
 import { ensureSeedCourses } from "../modules/academy/courses.js";
 import { enrollFromCompanyAssignments } from "../modules/academy/enrollments.js";
+import { ensureDefaultExpensePolicies } from "../modules/approvals/engine.js";
 
 /** Fake seed only — never production people or passwords. */
 export const SEED_PASSWORD = "Wolf-Fake-Pass-1!";
@@ -180,6 +181,8 @@ export function seedDatabase(db = getDb()): void {
     });
   }
 
+  ensureDefaultExpensePolicies(db);
+
   // Per-company org + leave + divergent payroll/service-charge defaults (ops can edit later)
   const policyByCode: Record<string, Parameters<typeof setPayrollPolicy>[1]> = {
     AMG: {
@@ -238,6 +241,9 @@ const FINANCE_PERMS = [
   "finance.tax.write",
   "finance.petty_cash.read",
   "finance.petty_cash.write",
+  "finance.expense.read",
+  "finance.expense.write",
+  "finance.expense.approve",
 ];
 
 const STAFF_PERMS = ["finance.health.read", "finance.session.read"];

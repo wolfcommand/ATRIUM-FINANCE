@@ -171,6 +171,21 @@
 
 ---
 
+## Phase 4 — Approvals + Finance expense core (2026-10-22)
+
+| Item | Decision |
+|---|---|
+| Policy home | Wolf API `approval_policies` / steps / requests (not Finance in-memory) |
+| Snapshot | `chain_snapshot` JSON frozen on submit; policy edits = new version + `valid_to` on old |
+| First subject | `finance.expense` in API + portal `/approvals` inbox |
+| Finance Level-2 journals | Keep existing `apps/finance` approvalPolicy until absorb; core is the target |
+| Events | Final expense approval publishes `expense.approved` via outbox |
+
+### Not done
+- Full absorb of Finance journals into core engine; rich policy editor UI; leave/request types on same engine.
+
+---
+
 ## Phase 3 — HR complete + Academy (2026-10-22)
 
 | Item | Decision |

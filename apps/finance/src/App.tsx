@@ -22,7 +22,6 @@ import { AdministrationView } from './components/AdministrationView';
 import { MappingModal } from './components/MappingModal';
 import { DbStatusModal } from './components/DbStatusModal';
 import { ManualJournalModal } from './components/ManualJournalModal';
-import { LoginScreen } from './components/auth/LoginScreen';
 import { PettyCashView } from './components/PettyCashView';
 import {
   Account,
@@ -34,16 +33,16 @@ import {
   DEFAULT_MAPPING_CONFIG,
   PrimaryNavPillar,
   AccessControlState,
-  SystemUser,
-  UserRoleDefinition,
 } from './types';
 import { api } from './services/api';
 
+const PORTAL_URL = import.meta.env.VITE_PORTAL_URL ?? 'http://localhost:3100';
+
 export default function App() {
-  // Session Authentication Gate State
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('amg_auth_session') === 'active';
-  });
+  // Wolf handoff session gate (Prompt 3) — legacy localStorage login removed
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Primary 8-Pillar Navigation State
   const [activePillar, setActivePillar] = useState<PrimaryNavPillar>('command-centre');
@@ -144,8 +143,52 @@ export default function App() {
     : true;
 
   useEffect(() => {
-    refreshAll();
-  }, [refreshAll]);
+    let cancelled = false;
+    async function bootstrapWolfSession() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const handoffToken = params.get('wolf_token');
+        if (handoffToken) {
+          const res = await fetch('/api/wolf/handoff', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ token: handoffToken }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            if (!cancelled) setAuthError(body.error || 'handoff_failed');
+            return;
+          }
+          window.history.replaceState({}, '', '/');
+        }
+        const sessionRes = await fetch('/api/wolf/session', { credentials: 'include' });
+        if (!sessionRes.ok) {
+          if (!cancelled) {
+            setIsAuthenticated(false);
+            setAuthError('wolf_session_required');
+          }
+          return;
+        }
+        if (!cancelled) {
+          setIsAuthenticated(true);
+          setAuthError(null);
+        }
+      } catch {
+        if (!cancelled) setAuthError('wolf_unreachable');
+      } finally {
+        if (!cancelled) setAuthChecking(false);
+      }
+    }
+    bootstrapWolfSession();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) refreshAll();
+  }, [isAuthenticated, refreshAll]);
 
   // Direct Pillar Navigation Handler
   const handleNavigateToPillar = (pillar: PrimaryNavPillar, subView?: string) => {
@@ -208,25 +251,35 @@ export default function App() {
     handleViewJournal(journalId);
   };
 
-  const handleLoginSuccess = (user: SystemUser, role: UserRoleDefinition, state: AccessControlState) => {
-    localStorage.setItem('amg_auth_session', 'active');
-    localStorage.setItem('amg_auth_email', user.email);
-    setAccessControl(state);
-    setIsAuthenticated(true);
+  const handleSignOut = async () => {
+    await fetch('/api/wolf/logout', { method: 'POST', credentials: 'include' });
+    setIsAuthenticated(false);
+    window.location.href = PORTAL_URL;
   };
 
-  const handleSignOut = () => {
-    localStorage.removeItem('amg_auth_session');
-    localStorage.removeItem('amg_auth_email');
-    setIsAuthenticated(false);
-  };
+  if (authChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-700">
+        Checking Wolf session…
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
-      <LoginScreen
-        onLoginSuccess={handleLoginSuccess}
-        registeredUsers={accessControl?.users || []}
-      />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-50 text-slate-800 p-6">
+        <h1 className="text-xl font-semibold">Finance requires Wolf portal sign-in</h1>
+        <p className="text-sm text-slate-600 max-w-md text-center">
+          Legacy login is disabled. Open Finance from the Wolf portal launcher
+          {authError ? ` (${authError})` : ''}.
+        </p>
+        <a
+          href={PORTAL_URL}
+          className="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium"
+        >
+          Go to Wolf portal
+        </a>
+      </div>
     );
   }
 

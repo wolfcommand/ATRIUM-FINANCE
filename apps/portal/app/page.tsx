@@ -1,13 +1,11 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 
-const FINANCE_DEV_URL =
-  process.env.NEXT_PUBLIC_FINANCE_URL ?? "http://localhost:3000";
 const API_ORIGIN = process.env.WOLF_API_ORIGIN ?? "http://127.0.0.1:4000";
 
 type Me = {
   user: { email: string; displayName: string };
-  companies: Array<{ code: string; name: string; apps: string[] }>;
+  companies: Array<{ id: string; code: string; name: string; apps: string[] }>;
 };
 
 async function loadMe(): Promise<Me | null> {
@@ -78,7 +76,7 @@ export default async function PortalLauncherPage() {
                 <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {c.apps.includes("finance") ? (
                     <a
-                      href={FINANCE_DEV_URL}
+                      href={`/open-finance?companyId=${encodeURIComponent(c.id)}`}
                       style={{ color: "#f8fafc", fontWeight: 600 }}
                     >
                       Open Finance

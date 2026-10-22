@@ -15,6 +15,13 @@ import { ownerEmailStore } from './server/ownerEmailStore';
 import { taxStore } from './server/taxStore';
 import { arapStore } from './server/arapStore';
 import { pettyCashStore } from './server/pettyCashStore';
+import {
+  clearFinanceSessionCookie,
+  exchangeHandoffToken,
+  getFinanceSession,
+  requireWolfSession,
+  setFinanceSessionCookie,
+} from './server/wolfAuth';
 
 dotenv.config();
 
@@ -36,6 +43,58 @@ async function startServer() {
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
+
+  // Wolf portal handoff (Prompt 3) — only trusted entry path
+  app.post('/api/wolf/handoff', async (req, res) => {
+    try {
+      const token = String(req.body?.token ?? '');
+      if (!token) {
+        res.status(400).json({ error: 'token_required' });
+        return;
+      }
+      const session = await exchangeHandoffToken(token);
+      setFinanceSessionCookie(res, session.id);
+      res.json({
+        ok: true,
+        userId: session.userId,
+        companyId: session.companyId,
+        authLevel: session.authLevel,
+      });
+    } catch (err: any) {
+      const msg = err?.message || 'handoff_failed';
+      const status = msg === 'wolf_session_revoked' ? 401 : 401;
+      res.status(status).json({ error: msg });
+    }
+  });
+
+  app.get('/api/wolf/session', (req, res) => {
+    const session = getFinanceSession(req);
+    if (!session) {
+      res.status(401).json({ error: 'wolf_session_required' });
+      return;
+    }
+    res.json({
+      userId: session.userId,
+      companyId: session.companyId,
+      authLevel: session.authLevel,
+      authTime: session.authTime,
+    });
+  });
+
+  app.post('/api/wolf/logout', (req, res) => {
+    clearFinanceSessionCookie(res);
+    res.json({ ok: true });
+  });
+
+  // Disable legacy password login — Finance trusts Wolf handoff only
+  app.post('/api/auth/verify-user', (_req, res) => {
+    res.status(410).json({
+      error: 'legacy_login_disabled',
+      message: 'Sign in through the Wolf portal.',
+    });
+  });
+
+  app.use(requireWolfSession);
 
   // Google Sheets Connection Status
   app.get('/api/status', (req, res) => {

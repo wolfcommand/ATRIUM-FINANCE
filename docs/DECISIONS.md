@@ -50,3 +50,27 @@
 - Password auth only — MFA not enforced yet (go-live gate).
 - SQLite is not the prod datastore; schema must be ported to Postgres before shared environments.
 - Cookie `Secure` only in production; local HTTP OK for fake data.
+
+
+---
+
+## Prompt 3 — signed handoff to Finance
+
+| Item | Decision |
+|---|---|
+| Handoff token | EdDSA JWT, ~60s TTL, `aud=finance`, claims: user_id, session_id, company_id, auth_level, auth_time (no permissions) |
+| JWKS | `GET /.well-known/jwks.json` |
+| Finance entry | `POST /api/wolf/handoff` exchanges token for httpOnly `finance_wolf_session`; legacy login returns 410 |
+| Session checks | Every `/api/*` (except health/handoff/session) re-checks Wolf session active |
+| HR handoff | Deferred with HR |
+| Gateway | Documented in `docs/gateway-finance.md` (IAP/private ingress; not hard-coded) |
+
+### Changed
+- API handoff + JWKS; portal `/open-finance`; Finance wolfAuth middleware; tests for expired/wrong aud/tampered/revoked.
+
+### Not done
+- HR handoff; production gateway wiring; MFA step-up on handoff.
+
+### Risks
+- Finance still has open business APIs once a Wolf session exists — Prompt 4 adds authorize().
+- In-memory Finance sessions reset on process restart.

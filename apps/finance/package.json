@@ -9,7 +9,7 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/utils/reportExport.test.ts"
+    "test": "tsx --test src/utils/reportExport.test.ts src/wolfAuth.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -19,6 +19,7 @@
     "express": "^4.21.2",
     "firebase": "^12.19.0",
     "googleapis": "^181.0.0",
+    "jose": "^6.2.13",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.9",
     "lucide-react": "^0.546.0",

@@ -20,3 +20,33 @@
 - No Wolf identity/sessions (Prompt 2), JWT handoff (Prompt 3), or `authorize()` wrapping (Prompt 4).
 - No company_id / money / audit migrations (Prompt 5+).
 - No HR import.
+
+---
+
+## Prompt 2 — identity and sessions
+
+| Item | Decision |
+|---|---|
+| D1 Identity provider | **Self-hosted Wolf identity** (scrypt passwords + server-side `sessions` + httpOnly `wolf_session` cookie). Live Google Identity Platform spike not possible without tenant credentials in CI; platform still owns `users.id` (UUIDv7) and links providers via `auth_identities`. Passkeys/TOTP enrollment deferred before go-live; `auth_level` / `auth_time` fields exist for step-up later. |
+| API service | New `apps/api` (Express) — Next.js portal does not open the DB. |
+| Database for local/CI | SQLite via `better-sqlite3` at `apps/api/data/wolf.sqlite`. Production target remains Postgres (Cloud SQL) per architecture; migrate when hosting is ready. |
+| Seed | 3 companies (BZG, AMG, GGV) + 6 fake users; password `Wolf-Fake-Pass-1!` (dev only). |
+| Endpoints | `POST /v1/auth/login`, `POST /v1/auth/logout`, `POST /v1/auth/sessions/:id/revoke`, `GET /v1/me`. |
+| Portal | Login page + launcher shows companies/apps from `/v1/me`; proxies `/v1/*` to API. |
+
+### Changed
+
+- Added `@wolf/api` with identity/org tables, seed, session cookie auth, tests.
+- Portal login/logout and authenticated launcher.
+
+### Not done
+
+- Passkeys, TOTP enrollment UI, GIP Admin SDK.
+- Postgres, Cloud Run deploy.
+- JWT handoff to Finance (Prompt 3).
+
+### Risks
+
+- Password auth only — MFA not enforced yet (go-live gate).
+- SQLite is not the prod datastore; schema must be ported to Postgres before shared environments.
+- Cookie `Secure` only in production; local HTTP OK for fake data.

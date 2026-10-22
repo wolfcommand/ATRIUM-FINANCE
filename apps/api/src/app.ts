@@ -5,6 +5,7 @@ import { handoffRouter } from "./routes/handoff.js";
 import { accessRouter } from "./routes/access.js";
 import { eventsRouter } from "./routes/events.js";
 import { adminRouter } from "./routes/admin.js";
+import { hrRouter } from "./routes/hr.js";
 import { registerFinanceEmployeeRefConsumer } from "./modules/finance/employeeRefConsumer.js";
 import { resetOutboxHandlersForTests } from "./modules/integration/outbox.js";
 import { resetEmployeeRefConsumerForTests } from "./modules/finance/employeeRefConsumer.js";
@@ -20,11 +21,13 @@ export function createApp(opts?: { registerConsumers?: boolean }) {
         "http://127.0.0.1:3100",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://localhost:3200",
+        "http://127.0.0.1:3200",
       ],
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: "1mb" }));
+  app.use(express.json({ limit: "2mb" }));
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", service: "wolf-api" });
@@ -38,6 +41,7 @@ export function createApp(opts?: { registerConsumers?: boolean }) {
   app.use(accessRouter());
   app.use(eventsRouter());
   app.use(adminRouter());
+  app.use(hrRouter());
 
   if (opts?.registerConsumers !== false && !consumersRegistered) {
     registerFinanceEmployeeRefConsumer();

@@ -168,3 +168,26 @@
 ### Risks
 - Owner email hard-coded for admin gate — replace with role before go-live.
 - Portal admin SSR fetches need API reachable from portal server.
+
+---
+
+## Greenfield HRIS + multi-tenant ops + GCP target (2026-10-22)
+
+| Item | Decision |
+|---|---|
+| HR placement | Greenfield `apps/hr` (Vite+Express :3200) + domain APIs in `apps/api` `/v1/hr/*` — no legacy HRIS import |
+| Companies | BZG, AMG, GGV all get Portal→Finance and Portal→HR when entitled; handoff JWT carries `company_id` |
+| Ops config | Leave types, payroll rates, service charge mode (`equal`\|`by_level`\|`off`) + level weights + pools are **per company** — never global hard-codes |
+| Seed divergence | AMG=`by_level`, BZG=`equal`, GGV=`off` defaults; editable via API/UI |
+| Employee ID | `ENTITY+YY+MM+SEQ` using that company’s code |
+| Events | Real publishers on create/update/offboard → outbox → `finance.employee_ref` |
+| Local DB | SQLite via `WOLF_DB_PATH` **dev-only** |
+| Production DB | Cloud SQL PostgreSQL (`DATABASE_URL`); SQL in `apps/api/migrations/`; no Firestore as SoR |
+| Hosting | Cloud Run + Cloud DNS custom domains; host-only cookies; Secret Manager for secrets |
+| Sessions | Host-only httpOnly cookies (`wolf_session`, `finance_wolf_session`, `hr_wolf_session`); production cookie host = Cloud DNS name |
+
+### Changed
+- HR schema/modules/routes/tests; portal `/open-hr`; ecosystem scripts; `.env.example`; Postgres migration stub; Project runbook.
+
+### Not done
+- Live Cloud SQL cutover + `pg` driver in API runtime; payslip PDF binary; full attendance/AI modules.

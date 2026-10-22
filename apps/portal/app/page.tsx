@@ -100,6 +100,12 @@ export default async function PortalLauncherPage() {
               HR — coming soon (deferred)
             </span>
           </div>
+          <p style={{ marginTop: "1.25rem" }}>
+            <Link href="/admin" style={{ color: "#f8fafc", fontWeight: 600 }}>
+              Portal admin
+            </Link>
+            <span style={{ opacity: 0.65 }}> — users, grants, CSV import</span>
+          </p>
           <form action="/logout" method="post" style={{ marginTop: "1.5rem" }}>
             <LogoutButton />
           </form>

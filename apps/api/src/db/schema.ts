@@ -131,4 +131,29 @@ CREATE TABLE IF NOT EXISTS finance_consumer_processed (
   consumer TEXT NOT NULL,
   processed_at TEXT NOT NULL
 );
+
+-- Prompt 8: admin audit + access requests
+CREATE TABLE IF NOT EXISTS audit_events (
+  id TEXT PRIMARY KEY,
+  occurred_at TEXT NOT NULL,
+  actor_user_id TEXT,
+  action TEXT NOT NULL,
+  resource_type TEXT NOT NULL,
+  resource_id TEXT,
+  company_id TEXT,
+  outcome TEXT NOT NULL,
+  changes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS access_requests (
+  id TEXT PRIMARY KEY,
+  requester_user_id TEXT NOT NULL REFERENCES users(id),
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  permission_key TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending','approved','denied')),
+  created_at TEXT NOT NULL,
+  decided_at TEXT,
+  decided_by TEXT
+);
 `

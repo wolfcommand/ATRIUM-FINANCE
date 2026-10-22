@@ -123,7 +123,7 @@ export function accessRouter(): Router {
     (req, res) => {
       const schema = z.object({
         companyId: z.string().min(1),
-        permissionKey: z.enum(["app.finance", "app.hr"]),
+        permissionKey: z.enum(["app.finance", "app.hr", "app.content"]),
         reason: z.string().min(3).max(500),
       });
       const parsed = schema.safeParse(req.body);

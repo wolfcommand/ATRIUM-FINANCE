@@ -407,24 +407,23 @@ export class AccountingStore {
 
     for (const b of seedBatches) {
       const total = b.transient + b.group;
+      const currency = this.systemSettings.base_currency || 'IDR';
       const lines: JournalLine[] = [
         {
           journal_id: b.journal_id,
           line_no: 1,
           account_code: '1020',
           department_code: '100',
-          debit: total,
-          credit: 0,
           description: `Guest Folio Settlement & City Ledger Clearing: ${b.desc}`,
+          ...normalizeMoneyLine({ debit: total, credit: 0 }, currency),
         },
         {
           journal_id: b.journal_id,
           line_no: 2,
           account_code: '4010',
           department_code: '100',
-          debit: 0,
-          credit: b.transient,
           description: `Transient Room Revenue: ${b.desc}`,
+          ...normalizeMoneyLine({ debit: 0, credit: b.transient }, currency),
         },
       ];
 
@@ -434,9 +433,8 @@ export class AccountingStore {
           line_no: 3,
           account_code: '4020',
           department_code: '100',
-          debit: 0,
-          credit: b.group,
           description: `Group & Corporate Room Revenue: ${b.desc}`,
+          ...normalizeMoneyLine({ debit: 0, credit: b.group }, currency),
         });
       }
 
@@ -838,20 +836,28 @@ export class AccountingStore {
   }
 
   public async createJournal(
-    headerData: Omit<JournalHeader, 'journal_id' | 'status' | 'approved_by' | 'posted_at' | 'reversal_of'> & {
+    headerData: {
       journal_id?: string;
       status?: 'DRAFT';
       reversal_of?: string;
       company_id?: string;
       currency?: string;
+      journal_date: string;
+      period?: string;
+      source_type: JournalHeader['source_type'];
+      source_reference?: string;
+      created_by?: string;
     },
-    linesData: Array<
-      Omit<JournalLine, 'journal_id' | 'line_no' | 'debit_minor' | 'credit_minor' | 'currency'> & {
-        debit_minor?: number;
-        credit_minor?: number;
-        currency?: string;
-      }
-    >
+    linesData: Array<{
+      account_code: string;
+      department_code?: string;
+      debit?: number;
+      credit?: number;
+      debit_minor?: number;
+      credit_minor?: number;
+      currency?: string;
+      description?: string;
+    }>
   ): Promise<JournalWithLines> {
     const journal_id =
       headerData.journal_id ||
@@ -958,7 +964,7 @@ export class AccountingStore {
       subjectStatus: journal.status,
       approverName,
     });
-    if (!decision.allow) {
+    if (decision.allow === false) {
       throw new Error(decision.reason);
     }
 
@@ -1076,7 +1082,7 @@ export class AccountingStore {
     }
 
     // Offset lines: invert debits and credits
-    const reversalLines: Omit<JournalLine, 'journal_id' | 'line_no'>[] = original.lines.map((l) => ({
+    const reversalLines = original.lines.map((l) => ({
       account_code: l.account_code,
       department_code: l.department_code,
       debit: l.credit, // Invert
@@ -1087,6 +1093,8 @@ export class AccountingStore {
     const reversalJournal = await this.createJournal(
       {
         journal_id: reversalJournalId,
+        company_id: original.company_id,
+        currency: original.currency,
         journal_date: revDate,
         period: revDate.substring(0, 7),
         source_type: 'REVERSAL',
@@ -1292,7 +1300,7 @@ export class AccountingStore {
       createdTxs.push(txOther);
     }
 
-    const journalLines: Omit<JournalLine, 'journal_id' | 'line_no'>[] = [
+    const journalLines = [
       {
         account_code: defaultDebit,
         department_code: '100',

@@ -119,3 +119,21 @@
 ### Risks
 - Non-journal Finance tables still lack company filters — isolation incomplete for those modules.
 - Default company backfill assumes all legacy data is AMG until mapping arrives.
+
+---
+
+## Prompt 7 — events (partial; HR deferred)
+
+| Item | Decision |
+|---|---|
+| Outbox | `outbox_events` in Wolf API SQLite; `enqueueOutbox` for transactional writes |
+| Transport | In-memory bus + `relayOnce` / interval relay (emulator). No Pub/Sub yet |
+| HR publishers | **Deferred** — no HR app. Dev/CI uses `POST /v1/events/enqueue-fake` |
+| Finance consumer | `finance_employee_ref` read model; idempotent via `processed_events`; poison → `dead_letter_events` |
+| Direct HR reads | None introduced |
+
+### Not done
+- Real HR `employee.created` / `employment.ended` publishers; Pub/Sub; DLQ replay UI.
+
+### Risks
+- Fake enqueue must stay disabled in production (`WOLF_ALLOW_FAKE_EVENTS`).

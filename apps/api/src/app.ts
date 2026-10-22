@@ -3,8 +3,13 @@ import cors from "cors";
 import { authRouter } from "./routes/auth.js";
 import { handoffRouter } from "./routes/handoff.js";
 import { accessRouter } from "./routes/access.js";
+import { eventsRouter } from "./routes/events.js";
+import { registerFinanceEmployeeRefConsumer } from "./modules/events/financeEmployeeRef.js";
+import { clearBusForTests } from "./modules/events/bus.js";
 
-export function createApp() {
+let consumersRegistered = false;
+
+export function createApp(opts?: { registerConsumers?: boolean }) {
   const app = express();
   app.use(
     cors({
@@ -29,6 +34,18 @@ export function createApp() {
   app.use("/v1", auth);
   app.use(handoffRouter());
   app.use(accessRouter());
+  app.use(eventsRouter());
+
+  if (opts?.registerConsumers !== false && !consumersRegistered) {
+    registerFinanceEmployeeRefConsumer();
+    consumersRegistered = true;
+  }
 
   return app;
+}
+
+/** Test helper: reset bus handlers so createApp can re-register cleanly. */
+export function resetEventConsumersForTests(): void {
+  clearBusForTests();
+  consumersRegistered = false;
 }

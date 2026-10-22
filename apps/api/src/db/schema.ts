@@ -91,4 +91,30 @@ CREATE TABLE IF NOT EXISTS grants (
   reason TEXT,
   ticket_ref TEXT
 );
+
+-- Prompt 7: transactional outbox (HR publishers deferred; tests enqueue fake events)
+CREATE TABLE IF NOT EXISTS outbox_events (
+  id TEXT PRIMARY KEY,
+  aggregate TEXT NOT NULL,
+  type TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  published_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS dead_letter_events (
+  id TEXT PRIMARY KEY,
+  outbox_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  error TEXT NOT NULL,
+  failed_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS processed_events (
+  outbox_id TEXT PRIMARY KEY,
+  consumer TEXT NOT NULL,
+  processed_at TEXT NOT NULL
+);
 `

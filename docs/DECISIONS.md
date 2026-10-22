@@ -171,6 +171,21 @@
 
 ---
 
+## Phase 3 — HR complete + Academy (2026-10-22)
+
+| Item | Decision |
+|---|---|
+| Academy placement | API `/v1/academy/*` + portal `/academy` (no separate app yet) |
+| Base access | Every employment gets `academy` entitlement + learner grants (§5.1) |
+| Onboarding link | `employee.created` → academy onboarding consumer enrolls company-assigned courses |
+| Catalog | Seeded Welcome + Security courses; company-wide assignments, 14-day due |
+| Content Machine | Still coming_soon |
+
+### Not done
+- Certificates, rich course authoring UI, separate Next academy app, role/department assignment rules.
+
+---
+
 ## Phase 2 — Shell and admin (2026-10-22)
 
 | Item | Decision |

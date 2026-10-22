@@ -4,6 +4,8 @@ import { hashPassword } from "../lib/password.js";
 import { seedLeaveTypesForCompany } from "../modules/hr/leave.js";
 import { ensureDemoOrg } from "../modules/hr/org.js";
 import { setPayrollPolicy } from "../modules/hr/payroll.js";
+import { ensureSeedCourses } from "../modules/academy/courses.js";
+import { enrollFromCompanyAssignments } from "../modules/academy/enrollments.js";
 
 /** Fake seed only — never production people or passwords. */
 export const SEED_PASSWORD = "Wolf-Fake-Pass-1!";
@@ -147,6 +149,8 @@ export function seedDatabase(db = getDb()): void {
       for (const app of membership.apps) {
         insertEntitlement.run({ id: newId(), userId, companyId, appKey: app });
       }
+      // Academy is base for every employment (architecture §5.1)
+      seedAcademyLearner(db, userId, companyId);
       if (membership.apps.includes("finance")) {
         seedFinanceGrants(db, userId, companyId);
       }
@@ -159,6 +163,21 @@ export function seedDatabase(db = getDb()): void {
       }
     }
     n += 1;
+  }
+
+  ensureSeedCourses(db);
+  // Assign academy courses to existing employments (onboarding path for seed users)
+  const activeEmployments = db
+    .prepare(`SELECT id, user_id, company_id FROM employments WHERE status = 'active'`)
+    .all() as Array<{ id: string; user_id: string; company_id: string }>;
+  for (const e of activeEmployments) {
+    enrollFromCompanyAssignments({
+      userId: e.user_id,
+      employmentId: e.id,
+      companyId: e.company_id,
+      sourceEventId: "seed",
+      db,
+    });
   }
 
   // Per-company org + leave + divergent payroll/service-charge defaults (ops can edit later)
@@ -223,6 +242,13 @@ const FINANCE_PERMS = [
 
 const STAFF_PERMS = ["finance.health.read", "finance.session.read"];
 
+/** Academy learner base (architecture §5.1 — every employee). */
+const ACADEMY_LEARNER_PERMS = [
+  "academy.course.read",
+  "academy.enrollment.read",
+  "academy.progress.write",
+];
+
 /** Base identity grants for every seeded user (group scope). */
 const IDENTITY_BASE_PERMS = [
   "identity.me.read",
@@ -268,10 +294,35 @@ function ensurePermissions(db: ReturnType<typeof getDb>): void {
     ...FINANCE_PERMS,
     ...HR_PERMS,
     ...STAFF_PERMS,
+    ...ACADEMY_LEARNER_PERMS,
     ...IDENTITY_BASE_PERMS,
     ...INTEGRATION_PERMS,
   ]) {
     insert.run(key, key);
+  }
+}
+
+function seedAcademyLearner(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  companyId: string,
+): void {
+  ensurePermissions(db);
+  db.prepare(
+    `INSERT OR IGNORE INTO app_entitlements (id, user_id, company_id, app_key)
+     VALUES (?, ?, ?, 'academy')`,
+  ).run(newId(), userId, companyId);
+  const insert = db.prepare(
+    `INSERT INTO grants (id, user_id, role_id, permission_key, scope_type, scope_id, valid_from, valid_to, granted_by, reason, ticket_ref)
+     VALUES (@id, @userId, NULL, @permissionKey, 'company', @companyId, '2024-01-01', NULL, 'seed', 'fake academy learner base', NULL)`,
+  );
+  for (const permissionKey of ACADEMY_LEARNER_PERMS) {
+    const exists = db
+      .prepare(
+        `SELECT 1 AS ok FROM grants WHERE user_id = ? AND permission_key = ? AND scope_id = ?`,
+      )
+      .get(userId, permissionKey, companyId);
+    if (!exists) insert.run({ id: newId(), userId, permissionKey, companyId });
   }
 }
 

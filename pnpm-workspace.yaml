@@ -1,4 +1,5 @@
 packages:
   - "apps/finance"
   - "apps/portal"
+  - "apps/api"
   - "packages/*"

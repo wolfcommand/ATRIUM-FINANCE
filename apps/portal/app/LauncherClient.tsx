@@ -158,9 +158,19 @@ export function LauncherClient({ me }: { me: Me }) {
                 subtitle={`${company.code} · entitled`}
                 state="open"
                 action={
-                  <a href={href} style={{ fontWeight: 700, textDecoration: "underline" }}>
-                    Open {item.label}
-                  </a>
+                  <span style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    <a href={href} style={{ fontWeight: 700, textDecoration: "underline" }}>
+                      Open {item.label}
+                    </a>
+                    {item.key === "finance" ? (
+                      <a
+                        href={`/approvals?companyId=${encodeURIComponent(company.id)}`}
+                        style={{ fontWeight: 600, textDecoration: "underline", opacity: 0.9 }}
+                      >
+                        Approvals
+                      </a>
+                    ) : null}
+                  </span>
                 }
               />
             );

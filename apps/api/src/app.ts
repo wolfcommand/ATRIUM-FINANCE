@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { authRouter } from "./routes/auth.js";
 import { handoffRouter } from "./routes/handoff.js";
+import { accessRouter } from "./routes/access.js";
 
 export function createApp() {
   const app = express();
@@ -27,6 +28,7 @@ export function createApp() {
   // Playbook: GET /v1/me (same handlers; /me is defined on the router)
   app.use("/v1", auth);
   app.use(handoffRouter());
+  app.use(accessRouter());
 
   return app;
 }

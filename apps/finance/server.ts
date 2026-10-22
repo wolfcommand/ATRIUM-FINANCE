@@ -22,6 +22,7 @@ import {
   requireWolfSession,
   setFinanceSessionCookie,
 } from './server/wolfAuth';
+import { requireAuthorized } from './server/authorizeMiddleware';
 
 dotenv.config();
 
@@ -95,6 +96,7 @@ async function startServer() {
   });
 
   app.use(requireWolfSession);
+  app.use(requireAuthorized);
 
   // Google Sheets Connection Status
   app.get('/api/status', (req, res) => {

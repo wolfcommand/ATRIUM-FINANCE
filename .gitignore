@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+.turbo/
+.next/
+**/.next/
+*.tsbuildinfo
+pnpm-debug.log*

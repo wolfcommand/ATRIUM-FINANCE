@@ -1,0 +1,20 @@
+---
+description: Rules for integrating the existing Finance and HR apps
+globs: apps/finance/**,apps/hr/**,packages/legacy-*/**
+alwaysApply: false
+---
+
+These apps existed before the Wolf platform. Integrate them without breaking what works.
+
+- Preserve existing behavior unless a task explicitly changes it. Add characterization tests
+  before refactoring anything.
+- Remove the app's own login. Trust only the signed identity issued by the Wolf portal,
+  verified on every request. Never trust identity headers that could come from the internet.
+- Deny by default. Every route, API endpoint, and server action must call the shared
+  authorize() guard with a permission key such as finance.expense.read.
+- Do not widen data access to make something work. If scoping by company breaks a screen,
+  fix the query, not the rule.
+- Data migrations must be reversible or backed up first, run against fake data in dev,
+  and include a reconciliation check (counts and totals before and after).
+- Do not rename or restructure existing tables beyond what the task needs.
+- Keep the existing UI working. Restyle to the Wolf design system only in later, separate tasks.

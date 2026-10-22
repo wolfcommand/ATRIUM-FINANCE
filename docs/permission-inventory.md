@@ -30,3 +30,20 @@ Applied without waiting for separate review per owner directive (continue until 
 | * | `/api/petty-cash*` | `finance.petty_cash.read` / `write` | |
 
 Any `/api/*` path that does not match a pattern is **denied** (`unguarded_route`).
+
+---
+
+## Wolf API + HR inventory (Phase 1 Trust core)
+
+Source of truth for CI: `apps/api/src/routes/registry.ts` (`assertRoutesGuarded` in `auth-matrix.test.ts`).
+
+| Area | Permission keys | Notes |
+|---|---|---|
+| Public | `public` sentinel | `/health`, JWKS, login/logout, session-active capability |
+| Identity | `identity.me.read`, `identity.session.revoke`, `identity.handoff.create` | Seeded group-scope for all fake users |
+| Admin | `portal.admin` | Owner + developer seed; no email bypass |
+| Integration | `integration.events.inject`, `.relay`, `.read` | Owner/developer |
+| Finance read-model | `finance.employee_ref.read` | Owner/developer |
+| HR | `hr.session.read`, `hr.employee.*`, `hr.leave.*`, `hr.payroll.*`, `hr.self.*` | Company-scoped via entitlements + grants |
+
+HR deferred note above is obsolete — HR routes live under `/v1/hr/*` and call `authorize()` through `requireHrPermission`.

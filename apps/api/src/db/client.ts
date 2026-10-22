@@ -37,6 +37,7 @@ function migrateSqlite(db: Db): void {
     "service_charge_pool_minor",
     `service_charge_pool_minor INTEGER NOT NULL DEFAULT 0`,
   );
+  ensureCol("users", "grants_version", `grants_version INTEGER NOT NULL DEFAULT 0`);
 }
 
 export function openDb(dbPath?: string): Db {

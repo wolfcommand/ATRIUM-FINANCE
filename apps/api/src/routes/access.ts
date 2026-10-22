@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { parse as parseCookie } from "cookie";
 import { authorize, type Grant } from "@wolf/access";
 import { z } from "zod";
 import { getDb } from "../db/client.js";
-import { SESSION_COOKIE, getActiveSession } from "../modules/identity/sessions.js";
+import { requirePermission } from "../modules/access/requirePermission.js";
+import { getGrantsVersion } from "../modules/access/grantsVersion.js";
 
 const bodySchema = z.object({
   action: z.string().min(1),
@@ -45,71 +45,64 @@ function loadGrants(userId: string): Grant[] {
 export function accessRouter(): Router {
   const router = Router();
 
-  router.get("/v1/access/grants", (req, res) => {
-    const raw = req.headers.cookie;
-    const sessionId = raw ? parseCookie(raw)[SESSION_COOKIE] : null;
-    if (!sessionId) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-    const session = getActiveSession(getDb(), sessionId);
-    if (!session) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-    res.json({ grants: loadGrants(session.user_id) });
-  });
+  router.get(
+    "/v1/access/grants",
+    requirePermission("identity.me.read", { classification: 1, resourceType: "grants" }),
+    (req, res) => {
+      const auth = req.wolfAuth!;
+      res.json({
+        grants: loadGrants(auth.userId),
+        grants_version: getGrantsVersion(auth.userId),
+      });
+    },
+  );
 
-  /** Finance service lookup: requires active Wolf session id header matching the user. */
-  router.get("/v1/access/grants-for-user/:userId", (req, res) => {
-    const wolfSessionId = String(req.headers["x-wolf-session-id"] ?? "");
-    if (!wolfSessionId) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-    const session = getActiveSession(getDb(), wolfSessionId);
-    if (!session || session.user_id !== req.params.userId) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-    res.json({ grants: loadGrants(session.user_id) });
-  });
+  /** Finance service lookup: session header must match the user (authorize already ran). */
+  router.get(
+    "/v1/access/grants-for-user/:userId",
+    requirePermission("identity.me.read", { classification: 1, resourceType: "grants" }),
+    (req, res) => {
+      const auth = req.wolfAuth!;
+      if (auth.userId !== req.params.userId) {
+        res.status(401).json({ error: "unauthorized" });
+        return;
+      }
+      res.json({
+        grants: loadGrants(auth.userId),
+        grants_version: getGrantsVersion(auth.userId),
+      });
+    },
+  );
 
-  router.post("/v1/access/authorize", (req, res) => {
-    const raw = req.headers.cookie;
-    const sessionId = raw ? parseCookie(raw)[SESSION_COOKIE] : null;
-    if (!sessionId) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-    const session = getActiveSession(getDb(), sessionId);
-    if (!session) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-    const parsed = bodySchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "invalid_body" });
-      return;
-    }
-    const grants = loadGrants(session.user_id);
-    const decision = authorize(
-      {
-        userId: session.user_id,
-        sessionId: session.id,
-        authLevel: session.auth_level,
-        authTime: new Date(session.auth_time),
-        companyId: parsed.data.companyId,
-      },
-      parsed.data.action,
-      parsed.data.resource ??
-        (parsed.data.companyId
-          ? { type: "company", companyId: parsed.data.companyId }
-          : undefined),
-      grants,
-    );
-    res.json(decision);
-  });
+  router.post(
+    "/v1/access/authorize",
+    requirePermission("identity.me.read", { classification: 1, resourceType: "authorize" }),
+    (req, res) => {
+      const auth = req.wolfAuth!;
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "invalid_body" });
+        return;
+      }
+      const grants = loadGrants(auth.userId);
+      const decision = authorize(
+        {
+          userId: auth.userId,
+          sessionId: auth.session.id,
+          authLevel: auth.session.auth_level,
+          authTime: new Date(auth.session.auth_time),
+          companyId: parsed.data.companyId,
+        },
+        parsed.data.action,
+        parsed.data.resource ??
+          (parsed.data.companyId
+            ? { type: "company", companyId: parsed.data.companyId }
+            : undefined),
+        grants,
+      );
+      res.json({ ...decision, grants_version: getGrantsVersion(auth.userId) });
+    },
+  );
 
   return router;
 }

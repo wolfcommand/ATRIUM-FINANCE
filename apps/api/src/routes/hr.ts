@@ -3,6 +3,7 @@
  */
 import { Router } from "express";
 import { z } from "zod";
+import { authorize } from "@wolf/access";
 import {
   getHrAuth,
   requireHrPermission,
@@ -70,11 +71,11 @@ export function hrRouter(): Router {
   const router = Router();
   router.use("/v1/hr", requireHrSession);
 
-  router.get("/v1/hr/health", (_req, res) => {
+  router.get("/v1/hr/health", requireHrPermission("hr.session.read"), (_req, res) => {
     res.json({ status: "ok", service: "wolf-hr" });
   });
 
-  router.get("/v1/hr/meta", (req, res) => {
+  router.get("/v1/hr/meta", requireHrPermission("hr.session.read"), (req, res) => {
     const auth = getHrAuth(req);
     ensureDemoOrg(auth.companyId);
     seedLeaveTypesForCompany(auth.companyId);
@@ -179,9 +180,24 @@ export function hrRouter(): Router {
       const auth = getHrAuth(req);
       const restricted = String(req.query.restricted ?? "") === "1";
       if (restricted) {
-        const ok = auth.grants.some((g) => g.permissionKey === "hr.employee.read_restricted");
-        if (!ok) {
-          res.status(403).json({ error: "forbidden", permission: "hr.employee.read_restricted" });
+        const decision = authorize(
+          {
+            userId: auth.userId,
+            sessionId: auth.session.id,
+            authLevel: auth.session.auth_level,
+            authTime: new Date(auth.session.auth_time),
+            companyId: auth.companyId,
+          },
+          "hr.employee.read_restricted",
+          { type: "hr", companyId: auth.companyId, classification: 3 },
+          auth.grants,
+        );
+        if (!decision.allow) {
+          res.status(403).json({
+            error: "forbidden",
+            reason: decision.reason,
+            permission: "hr.employee.read_restricted",
+          });
           return;
         }
       }

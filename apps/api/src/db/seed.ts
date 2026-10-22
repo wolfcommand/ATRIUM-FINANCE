@@ -126,6 +126,15 @@ export function seedDatabase(db = getDb()): void {
       });
       insertIdentity.run({ id: newId(), userId, subject: u.email });
     }
+    ensurePermissions(db);
+    for (const perm of IDENTITY_BASE_PERMS) {
+      seedGroupGrant(db, userId, perm, "fake identity base");
+    }
+    if (u.email === "owner@wolf.example" || u.email === "developer@wolf.example") {
+      for (const perm of INTEGRATION_PERMS) {
+        seedGroupGrant(db, userId, perm, "fake portal admin / integration");
+      }
+    }
     for (const membership of u.companies) {
       const companyId = companyIds.get(membership.code)!;
       insertEmployment.run({
@@ -214,6 +223,22 @@ const FINANCE_PERMS = [
 
 const STAFF_PERMS = ["finance.health.read", "finance.session.read"];
 
+/** Base identity grants for every seeded user (group scope). */
+const IDENTITY_BASE_PERMS = [
+  "identity.me.read",
+  "identity.session.revoke",
+  "identity.handoff.create",
+];
+
+/** Integration / ops grants for portal admins (group scope). */
+const INTEGRATION_PERMS = [
+  "integration.events.inject",
+  "integration.events.relay",
+  "integration.events.read",
+  "finance.employee_ref.read",
+  "portal.admin",
+];
+
 const HR_PERMS = [
   "hr.session.read",
   "hr.employee.read",
@@ -239,9 +264,33 @@ function ensurePermissions(db: ReturnType<typeof getDb>): void {
     `INSERT OR IGNORE INTO permissions (key, description, default_classification)
      VALUES (?, ?, 2)`,
   );
-  for (const key of [...FINANCE_PERMS, ...HR_PERMS, ...STAFF_PERMS]) {
+  for (const key of [
+    ...FINANCE_PERMS,
+    ...HR_PERMS,
+    ...STAFF_PERMS,
+    ...IDENTITY_BASE_PERMS,
+    ...INTEGRATION_PERMS,
+  ]) {
     insert.run(key, key);
   }
+}
+
+function seedGroupGrant(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  permissionKey: string,
+  reason: string,
+): void {
+  const exists = db
+    .prepare(
+      `SELECT 1 AS ok FROM grants WHERE user_id = ? AND permission_key = ? AND scope_type = 'group'`,
+    )
+    .get(userId, permissionKey);
+  if (exists) return;
+  db.prepare(
+    `INSERT INTO grants (id, user_id, role_id, permission_key, scope_type, scope_id, valid_from, valid_to, granted_by, reason, ticket_ref)
+     VALUES (?, ?, NULL, ?, 'group', NULL, '2024-01-01', NULL, 'seed', ?, NULL)`,
+  ).run(newId(), userId, permissionKey, reason);
 }
 
 function seedHrGrants(

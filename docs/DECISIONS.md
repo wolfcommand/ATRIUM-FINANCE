@@ -171,6 +171,30 @@
 
 ---
 
+## Phase 1 — Trust core gaps (2026-10-22)
+
+| Item | Decision |
+|---|---|
+| Admin gate | `authorize("portal.admin")` only — removed owner-email bypass |
+| Events / employee-refs | Require `integration.events.*` / `finance.employee_ref.read` via `requirePermission` |
+| Identity routes | `/v1/me`, session revoke, handoff, grants use `identity.*` permissions |
+| grants_version | Column on `users`; bumped on grant/membership/access-request approve |
+| Route registry | `apps/api/src/routes/registry.ts` + `assertRoutesGuarded` in CI (`auth-matrix.test.ts`) |
+| RLS | `migrations/002_trust_core_rls.sql` enables FORCE RLS + `company_isolation` on company-scoped tables |
+| D1–D8 | Unchanged defaults from architecture §13 (self-hosted identity until GIP spike) |
+
+### Changed
+- Shared `requirePermission` / `grantsVersion`; admin/events/auth/access/handoff/HR health+meta hardened; seed base identity + portal.admin grants; auth matrix tests.
+
+### Not done
+- Live MFA/passkeys; Postgres cutover + SET LOCAL company_ids in API request path; step-up enforcement beyond obligations.
+
+### Risks
+- `/v1/sessions/:id/active` remains intentionally `public` (opaque session-id capability for Finance/HR).
+- SQLite has no RLS — company isolation is app-layer until Cloud SQL.
+
+---
+
 ## Greenfield HRIS + multi-tenant ops + GCP target (2026-10-22)
 
 | Item | Decision |

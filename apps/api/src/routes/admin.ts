@@ -4,6 +4,7 @@ import { getDb } from "../db/client.js";
 import { newId } from "../lib/ids.js";
 import { requireAdminSession } from "../modules/admin/session.js";
 import { writeAdminAudit, listAdminAudit } from "../modules/admin/audit.js";
+import { bumpGrantsVersion } from "../modules/access/grantsVersion.js";
 import {
   previewEmployeeImport,
   commitEmployeeImport,
@@ -60,6 +61,7 @@ export function adminRouter() {
          VALUES (?, ?, ?, NULL, 'active', ?, NULL)`,
       )
       .run(id, parsed.data.userId, parsed.data.companyId, parsed.data.validFrom);
+    bumpGrantsVersion(parsed.data.userId);
     writeAdminAudit({
       actorUserId: admin.user_id,
       action: "admin.membership.create",
@@ -128,13 +130,14 @@ export function adminRouter() {
       admin.user_id,
       parsed.data.reason,
     );
+    const grantsVersion = bumpGrantsVersion(parsed.data.userId);
     writeAdminAudit({
       actorUserId: admin.user_id,
       action: "admin.grant.create",
       resourceType: "grant",
       resourceId: id,
       companyId: parsed.data.scopeId,
-      changes: parsed.data,
+      changes: { ...parsed.data, grants_version: grantsVersion },
     });
     res.status(201).json({ id });
   });
@@ -228,6 +231,7 @@ export function adminRouter() {
         `INSERT INTO grants (id, user_id, role_id, permission_key, scope_type, scope_id, valid_from, valid_to, granted_by, reason, ticket_ref)
          VALUES (?, ?, NULL, ?, 'company', ?, date('now'), NULL, ?, 'access request approved', NULL)`,
       ).run(newId(), row.requester_user_id, row.permission_key, row.company_id, admin.user_id);
+      bumpGrantsVersion(row.requester_user_id);
     }
     writeAdminAudit({
       actorUserId: admin.user_id,

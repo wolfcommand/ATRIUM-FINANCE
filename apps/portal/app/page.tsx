@@ -81,24 +81,22 @@ export default async function PortalLauncherPage() {
                     >
                       Open Finance
                     </a>
-                  ) : null}
-                  {!c.apps.includes("finance") ? (
+                  ) : (
                     <span style={{ opacity: 0.7 }}>No Finance add-on</span>
-                  ) : null}
+                  )}
+                  {c.apps.includes("hr") ? (
+                    <a
+                      href={`/open-hr?companyId=${encodeURIComponent(c.id)}`}
+                      style={{ color: "#f8fafc", fontWeight: 600 }}
+                    >
+                      Open HR
+                    </a>
+                  ) : (
+                    <span style={{ opacity: 0.7 }}>No HR add-on</span>
+                  )}
                 </div>
               </div>
             ))}
-            <span
-              style={{
-                display: "block",
-                padding: "1rem 1.25rem",
-                background: "rgba(248,250,252,0.08)",
-                borderRadius: 8,
-                opacity: 0.85,
-              }}
-            >
-              HR — coming soon (deferred)
-            </span>
           </div>
           <p style={{ marginTop: "1.25rem" }}>
             <Link href="/admin" style={{ color: "#f8fafc", fontWeight: 600 }}>

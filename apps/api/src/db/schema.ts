@@ -156,4 +156,180 @@ CREATE TABLE IF NOT EXISTS access_requests (
   decided_at TEXT,
   decided_by TEXT
 );
+
+-- Greenfield HRIS (Prompt 6/7) — company-scoped; PII on employee_profiles only
+CREATE TABLE IF NOT EXISTS hr_departments (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  UNIQUE (company_id, code)
+);
+
+CREATE TABLE IF NOT EXISTS hr_positions (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  department_id TEXT REFERENCES hr_departments(id),
+  code TEXT NOT NULL,
+  title TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  UNIQUE (company_id, code)
+);
+
+CREATE TABLE IF NOT EXISTS employee_id_sequences (
+  company_id TEXT NOT NULL,
+  yy_mm TEXT NOT NULL,
+  last_seq INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (company_id, yy_mm)
+);
+
+CREATE TABLE IF NOT EXISTS employee_profiles (
+  id TEXT PRIMARY KEY,
+  employment_id TEXT NOT NULL UNIQUE REFERENCES employments(id),
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  employee_code TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  preferred_name TEXT,
+  work_email TEXT,
+  phone TEXT,
+  date_of_birth TEXT,
+  gender TEXT,
+  nik TEXT,
+  npwp TEXT,
+  address TEXT,
+  emergency_contact_name TEXT,
+  emergency_contact_phone TEXT,
+  department_id TEXT REFERENCES hr_departments(id),
+  position_id TEXT REFERENCES hr_positions(id),
+  employment_type TEXT NOT NULL DEFAULT 'permanent',
+  job_title TEXT,
+  job_level TEXT NOT NULL DEFAULT 'L2',
+  service_charge_eligible INTEGER NOT NULL DEFAULT 1,
+  cost_centre TEXT,
+  bank_name TEXT,
+  bank_account_number TEXT,
+  bank_account_name TEXT,
+  base_salary_minor INTEGER NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'IDR',
+  join_date TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('active','ended')) DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  created_by TEXT,
+  updated_by TEXT,
+  UNIQUE (company_id, employee_code)
+);
+
+CREATE TABLE IF NOT EXISTS leave_types (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  default_entitlement REAL NOT NULL DEFAULT 0,
+  requires_attachment INTEGER NOT NULL DEFAULT 0,
+  requires_approval INTEGER NOT NULL DEFAULT 1,
+  is_paid INTEGER NOT NULL DEFAULT 1,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  UNIQUE (company_id, code)
+);
+
+CREATE TABLE IF NOT EXISTS leave_balances (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  employment_id TEXT NOT NULL REFERENCES employments(id),
+  leave_type_id TEXT NOT NULL REFERENCES leave_types(id),
+  year INTEGER NOT NULL,
+  opening_balance REAL NOT NULL DEFAULT 0,
+  earned REAL NOT NULL DEFAULT 0,
+  used REAL NOT NULL DEFAULT 0,
+  adjusted REAL NOT NULL DEFAULT 0,
+  UNIQUE (employment_id, leave_type_id, year)
+);
+
+CREATE TABLE IF NOT EXISTS leave_requests (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  employment_id TEXT NOT NULL REFERENCES employments(id),
+  leave_type_id TEXT NOT NULL REFERENCES leave_types(id),
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  total_days REAL NOT NULL,
+  reason TEXT,
+  status TEXT NOT NULL CHECK (status IN ('pending','approved','rejected','cancelled')) DEFAULT 'pending',
+  submitted_at TEXT NOT NULL,
+  decided_by TEXT,
+  decided_at TEXT,
+  rejection_reason TEXT
+);
+
+CREATE TABLE IF NOT EXISTS payroll_policy_config (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  key TEXT NOT NULL,
+  value_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  updated_by TEXT,
+  UNIQUE (company_id, key)
+);
+
+CREATE TABLE IF NOT EXISTS payroll_periods (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  period_code TEXT NOT NULL,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  pay_date TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('DRAFT','CALCULATED','UNDER_REVIEW','APPROVED','FINALIZED','LOCKED')) DEFAULT 'DRAFT',
+  service_charge_pool_minor INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT,
+  finalized_by TEXT,
+  finalized_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (company_id, period_code)
+);
+
+CREATE TABLE IF NOT EXISTS payroll_records (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  payroll_period_id TEXT NOT NULL REFERENCES payroll_periods(id),
+  employment_id TEXT NOT NULL REFERENCES employments(id),
+  gross_pay_minor INTEGER NOT NULL DEFAULT 0,
+  total_deductions_minor INTEGER NOT NULL DEFAULT 0,
+  net_pay_minor INTEGER NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'IDR',
+  status TEXT NOT NULL DEFAULT 'DRAFT',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (payroll_period_id, employment_id)
+);
+
+CREATE TABLE IF NOT EXISTS payroll_items (
+  id TEXT PRIMARY KEY,
+  payroll_record_id TEXT NOT NULL REFERENCES payroll_records(id),
+  component_code TEXT NOT NULL,
+  component_name TEXT NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('earning','deduction')),
+  amount_minor INTEGER NOT NULL,
+  source_type TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS payslips (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  payroll_record_id TEXT NOT NULL UNIQUE REFERENCES payroll_records(id),
+  file_path TEXT,
+  generated_at TEXT NOT NULL,
+  published_at TEXT,
+  email_status TEXT NOT NULL CHECK (email_status IN ('not_sent','queued','sent','failed')) DEFAULT 'not_sent',
+  email_to TEXT,
+  email_error TEXT,
+  emailed_at TEXT
+);
 `

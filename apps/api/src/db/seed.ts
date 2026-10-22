@@ -1,6 +1,9 @@
 import { getDb, openDb, setDb } from "./client.js";
 import { newId } from "../lib/ids.js";
 import { hashPassword } from "../lib/password.js";
+import { seedLeaveTypesForCompany } from "../modules/hr/leave.js";
+import { ensureDemoOrg } from "../modules/hr/org.js";
+import { setPayrollPolicy } from "../modules/hr/payroll.js";
 
 /** Fake seed only — never production people or passwords. */
 export const SEED_PASSWORD = "Wolf-Fake-Pass-1!";
@@ -16,15 +19,20 @@ const SEED_USERS: SeedUser[] = [
     email: "owner@wolf.example",
     displayName: "Fake Owner",
     companies: [
-      { code: "BZG", apps: ["portal", "finance"] },
-      { code: "AMG", apps: ["portal", "finance"] },
-      { code: "GGV", apps: ["portal", "finance"] },
+      { code: "BZG", apps: ["portal", "finance", "hr"] },
+      { code: "AMG", apps: ["portal", "finance", "hr"] },
+      { code: "GGV", apps: ["portal", "finance", "hr"] },
     ],
   },
   {
     email: "finance.amg@wolf.example",
     displayName: "Fake AMG Finance",
     companies: [{ code: "AMG", apps: ["portal", "finance"] }],
+  },
+  {
+    email: "hr.amg@wolf.example",
+    displayName: "Fake AMG HR Admin",
+    companies: [{ code: "AMG", apps: ["portal", "hr"] }],
   },
   {
     email: "staff.amg@wolf.example",
@@ -40,8 +48,8 @@ const SEED_USERS: SeedUser[] = [
     email: "exec@wolf.example",
     displayName: "Fake Group Exec",
     companies: [
-      { code: "BZG", apps: ["portal", "finance"] },
-      { code: "AMG", apps: ["portal", "finance"] },
+      { code: "BZG", apps: ["portal", "finance", "hr"] },
+      { code: "AMG", apps: ["portal", "finance", "hr"] },
     ],
   },
   {
@@ -132,11 +140,42 @@ export function seedDatabase(db = getDb()): void {
       }
       if (membership.apps.includes("finance")) {
         seedFinanceGrants(db, userId, companyId);
-      } else {
+      }
+      if (membership.apps.includes("hr")) {
+        seedHrGrants(db, userId, companyId);
+      }
+      // Portal-only staff (no finance/hr add-on) get minimal finance session grants for launcher health
+      if (!membership.apps.includes("finance") && !membership.apps.includes("hr")) {
         seedStaffGrants(db, userId, companyId);
       }
     }
     n += 1;
+  }
+
+  // Per-company org + leave + divergent payroll/service-charge defaults (ops can edit later)
+  const policyByCode: Record<string, Parameters<typeof setPayrollPolicy>[1]> = {
+    AMG: {
+      pph21_flat_rate: 0.05,
+      service_charge_mode: "by_level",
+      service_charge_default_pool_minor: 10_000_000_00,
+      service_charge_level_weights: { L1: 1, L2: 1.2, L3: 1.5, L4: 1.8, L5: 2.2 },
+    },
+    BZG: {
+      pph21_flat_rate: 0.06,
+      service_charge_mode: "equal",
+      service_charge_default_pool_minor: 5_000_000_00,
+      service_charge_level_weights: { L1: 1, L2: 1, L3: 1, L4: 1, L5: 1 },
+    },
+    GGV: {
+      pph21_flat_rate: 0.05,
+      service_charge_mode: "off",
+      service_charge_default_pool_minor: 0,
+    },
+  };
+  for (const [code, companyId] of companyIds.entries()) {
+    ensureDemoOrg(companyId, db);
+    seedLeaveTypesForCompany(companyId, db);
+    setPayrollPolicy(companyId, policyByCode[code] ?? {}, "seed");
   }
 }
 
@@ -175,13 +214,53 @@ const FINANCE_PERMS = [
 
 const STAFF_PERMS = ["finance.health.read", "finance.session.read"];
 
+const HR_PERMS = [
+  "hr.session.read",
+  "hr.employee.read",
+  "hr.employee.read_restricted",
+  "hr.employee.write",
+  "hr.employee.import",
+  "hr.employee.offboard",
+  "hr.leave.read",
+  "hr.leave.request",
+  "hr.leave.approve",
+  "hr.leave.admin",
+  "hr.payroll.read",
+  "hr.payroll.write",
+  "hr.payroll.calculate",
+  "hr.payroll.approve",
+  "hr.payroll.admin",
+  "hr.self.read",
+  "hr.self.write",
+];
+
 function ensurePermissions(db: ReturnType<typeof getDb>): void {
   const insert = db.prepare(
     `INSERT OR IGNORE INTO permissions (key, description, default_classification)
      VALUES (?, ?, 2)`,
   );
-  for (const key of FINANCE_PERMS) {
+  for (const key of [...FINANCE_PERMS, ...HR_PERMS, ...STAFF_PERMS]) {
     insert.run(key, key);
+  }
+}
+
+function seedHrGrants(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  companyId: string,
+): void {
+  ensurePermissions(db);
+  const insert = db.prepare(
+    `INSERT INTO grants (id, user_id, role_id, permission_key, scope_type, scope_id, valid_from, valid_to, granted_by, reason, ticket_ref)
+     VALUES (@id, @userId, NULL, @permissionKey, 'company', @companyId, '2024-01-01', NULL, 'seed', 'fake hr add-on', NULL)`,
+  );
+  for (const permissionKey of HR_PERMS) {
+    const exists = db
+      .prepare(
+        `SELECT 1 AS ok FROM grants WHERE user_id = ? AND permission_key = ? AND scope_id = ?`,
+      )
+      .get(userId, permissionKey, companyId);
+    if (!exists) insert.run({ id: newId(), userId, permissionKey, companyId });
   }
 }
 

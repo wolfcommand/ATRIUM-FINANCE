@@ -4,6 +4,8 @@
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "dev": "turbo run dev",
+    "dev:ecosystem": "bash scripts/dev-ecosystem.sh",
+    "smoke:ecosystem": "bash scripts/smoke-ecosystem.sh",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test"

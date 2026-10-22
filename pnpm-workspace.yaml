@@ -2,4 +2,5 @@ packages:
   - "apps/finance"
   - "apps/portal"
   - "apps/api"
+  - "apps/hr"
   - "packages/*"

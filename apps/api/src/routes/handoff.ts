@@ -7,7 +7,7 @@ import { getSigningKeys } from "../lib/keys.js";
 import { SESSION_COOKIE, getActiveSession } from "../modules/identity/sessions.js";
 
 const handoffSchema = z.object({
-  audience: z.enum(["finance"]),
+  audience: z.enum(["finance", "hr"]),
   companyId: z.string().min(1),
 });
 

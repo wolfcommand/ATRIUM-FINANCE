@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { WolfShell } from "@wolf/ui";
 import { AdminClient } from "./AdminClient";
 
 const API_ORIGIN = process.env.WOLF_API_ORIGIN ?? "http://127.0.0.1:4000";
@@ -37,37 +38,46 @@ export default async function AdminPage() {
   const session = jar.get("wolf_session");
   if (!session?.value) {
     return (
-      <main style={{ maxWidth: 960, margin: "0 auto", padding: "3rem 1.25rem" }}>
+      <WolfShell>
         <h1>Admin</h1>
         <p>
           <Link href="/login">Sign in</Link> required.
         </p>
-      </main>
+      </WolfShell>
     );
   }
   const cookieHeader = `wolf_session=${session.value}`;
   const data = await loadAdminBootstrap(cookieHeader);
   if (data.forbidden) {
     return (
-      <main style={{ maxWidth: 960, margin: "0 auto", padding: "3rem 1.25rem" }}>
+      <WolfShell
+        nav={
+          <Link href="/" style={{ fontWeight: 600 }}>
+            Launcher
+          </Link>
+        }
+      >
         <h1>Admin</h1>
-        <p>Forbidden — portal.admin (or owner) required.</p>
-        <Link href="/">Back to launcher</Link>
-      </main>
+        <p>Forbidden — requires the portal.admin grant (UI hide is not security).</p>
+        <Link href="/">← Launcher</Link>
+      </WolfShell>
     );
   }
 
   return (
-    <main style={{ maxWidth: 1100, margin: "0 auto", padding: "2.5rem 1.25rem" }}>
-      <p style={{ letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.7 }}>
+    <WolfShell
+      nav={
+        <Link href="/" style={{ fontWeight: 600 }}>
+          Launcher
+        </Link>
+      }
+    >
+      <p style={{ letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.7, margin: 0 }}>
         Wolf Intelligence
       </p>
-      <h1 style={{ marginTop: 4 }}>Portal admin</h1>
+      <h1 style={{ fontFamily: '"Fraunces", serif', marginTop: 4 }}>Portal admin</h1>
       <p style={{ opacity: 0.85 }}>
-        Users, memberships, grants, access requests, and employee CSV import (fake data only).
-      </p>
-      <p style={{ marginTop: 8 }}>
-        <Link href="/">← Launcher</Link>
+        Decide access requests, manage grants, and import employees (fake data only).
       </p>
       <AdminClient
         initialUsers={data.users}
@@ -76,6 +86,6 @@ export default async function AdminPage() {
         initialRequests={data.requests}
         initialAudit={data.audit}
       />
-    </main>
+    </WolfShell>
   );
 }

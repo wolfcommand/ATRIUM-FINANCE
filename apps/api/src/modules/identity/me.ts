@@ -19,6 +19,12 @@ export type MeResponse = {
     name: string;
     apps: string[];
   }>;
+  /** UI capabilities derived from grants (hiding UI is not security). */
+  capabilities: {
+    portalAdmin: boolean;
+  };
+  /** Catalog of company apps for launcher (entitled vs locked). */
+  appCatalog: Array<{ key: string; label: string; status: "available" | "coming_soon" }>;
 };
 
 export function buildMe(db: Db, session: SessionRow): MeResponse | null {
@@ -51,6 +57,16 @@ export function buildMe(db: Db, session: SessionRow): MeResponse | null {
       .map((ent) => ent.app_key),
   }));
 
+  const portalAdmin = Boolean(
+    db
+      .prepare(
+        `SELECT 1 AS ok FROM grants
+         WHERE user_id = ? AND permission_key = 'portal.admin'
+           AND (valid_to IS NULL OR valid_to > datetime('now'))`,
+      )
+      .get(user.id),
+  );
+
   return {
     user: {
       id: user.id,
@@ -64,5 +80,12 @@ export function buildMe(db: Db, session: SessionRow): MeResponse | null {
       authTime: session.auth_time,
     },
     companies,
+    capabilities: { portalAdmin },
+    appCatalog: [
+      { key: "finance", label: "Finance", status: "available" },
+      { key: "hr", label: "HR", status: "available" },
+      { key: "academy", label: "Academy", status: "coming_soon" },
+      { key: "content", label: "Content Machine", status: "coming_soon" },
+    ],
   };
 }

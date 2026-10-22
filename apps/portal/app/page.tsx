@@ -1,11 +1,15 @@
-import { cookies } from "next/headers";
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { WolfButton, WolfShell } from "@wolf/ui";
+import { LauncherClient } from "./LauncherClient";
 
 const API_ORIGIN = process.env.WOLF_API_ORIGIN ?? "http://127.0.0.1:4000";
 
 type Me = {
   user: { email: string; displayName: string };
   companies: Array<{ id: string; code: string; name: string; apps: string[] }>;
+  capabilities: { portalAdmin: boolean };
+  appCatalog: Array<{ key: string; label: string; status: "available" | "coming_soon" }>;
 };
 
 async function loadMe(): Promise<Me | null> {
@@ -18,7 +22,15 @@ async function loadMe(): Promise<Me | null> {
       cache: "no-store",
     });
     if (!res.ok) return null;
-    return (await res.json()) as Me;
+    const body = (await res.json()) as Me;
+    return {
+      ...body,
+      capabilities: body.capabilities ?? { portalAdmin: false },
+      appCatalog: body.appCatalog ?? [
+        { key: "finance", label: "Finance", status: "available" },
+        { key: "hr", label: "HR", status: "available" },
+      ],
+    };
   } catch {
     return null;
   }
@@ -27,96 +39,41 @@ async function loadMe(): Promise<Me | null> {
 export default async function PortalLauncherPage() {
   const me = await loadMe();
 
-  return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: "4rem 1.5rem" }}>
-      <p style={{ letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.75 }}>
-        Portal launcher
-      </p>
-      <h1 style={{ fontSize: "2.5rem", margin: "0.5rem 0 1rem" }}>Wolf Intelligence</h1>
-
-      {!me ? (
-        <>
-          <p style={{ fontSize: "1.125rem", lineHeight: 1.6, opacity: 0.9 }}>
-            Sign in to see companies and apps you can open.
-          </p>
-          <Link
-            href="/login"
-            style={{
-              display: "inline-block",
-              marginTop: "1.5rem",
-              padding: "0.85rem 1.25rem",
-              background: "#f8fafc",
-              color: "#0f172a",
-              textDecoration: "none",
-              borderRadius: 8,
-              fontWeight: 600,
-            }}
-          >
-            Sign in
+  if (!me) {
+    return (
+      <WolfShell>
+        <p
+          style={{
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            opacity: 0.7,
+            margin: 0,
+            fontSize: "0.8rem",
+          }}
+        >
+          Group portal
+        </p>
+        <h1
+          style={{
+            fontFamily: '"Fraunces", serif',
+            fontSize: "clamp(2.4rem, 6vw, 3.6rem)",
+            margin: "0.4rem 0 0.85rem",
+            letterSpacing: "-0.03em",
+          }}
+        >
+          Wolf Intelligence
+        </h1>
+        <p style={{ fontSize: "1.15rem", opacity: 0.9, maxWidth: 480, lineHeight: 1.55 }}>
+          One launcher for company workspaces. Sign in with a seeded fake account to continue.
+        </p>
+        <div style={{ marginTop: "1.75rem" }}>
+          <Link href="/login">
+            <WolfButton>Sign in</WolfButton>
           </Link>
-        </>
-      ) : (
-        <>
-          <p style={{ fontSize: "1.125rem", lineHeight: 1.6, opacity: 0.9 }}>
-            Signed in as <strong>{me.user.displayName}</strong> ({me.user.email})
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "2rem" }}>
-            {me.companies.map((c) => (
-              <div
-                key={c.code}
-                style={{
-                  padding: "1rem 1.25rem",
-                  background: "rgba(248,250,252,0.12)",
-                  borderRadius: 8,
-                }}
-              >
-                <div style={{ fontWeight: 600 }}>
-                  {c.code} — {c.name}
-                </div>
-                <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {c.apps.includes("finance") ? (
-                    <a
-                      href={`/open-finance?companyId=${encodeURIComponent(c.id)}`}
-                      style={{ color: "#f8fafc", fontWeight: 600 }}
-                    >
-                      Open Finance
-                    </a>
-                  ) : (
-                    <span style={{ opacity: 0.7 }}>No Finance add-on</span>
-                  )}
-                  {c.apps.includes("hr") ? (
-                    <a
-                      href={`/open-hr?companyId=${encodeURIComponent(c.id)}`}
-                      style={{ color: "#f8fafc", fontWeight: 600 }}
-                    >
-                      Open HR
-                    </a>
-                  ) : (
-                    <span style={{ opacity: 0.7 }}>No HR add-on</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-          <p style={{ marginTop: "1.25rem" }}>
-            <Link href="/admin" style={{ color: "#f8fafc", fontWeight: 600 }}>
-              Portal admin
-            </Link>
-            <span style={{ opacity: 0.65 }}> — users, grants, CSV import</span>
-          </p>
-          <form action="/logout" method="post" style={{ marginTop: "1.5rem" }}>
-            <LogoutButton />
-          </form>
-        </>
-      )}
-    </main>
-  );
-}
+        </div>
+      </WolfShell>
+    );
+  }
 
-function LogoutButton() {
-  return (
-    <Link href="/logout" style={{ color: "#fecaca" }}>
-      Sign out
-    </Link>
-  );
+  return <LauncherClient me={me} />;
 }

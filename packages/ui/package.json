@@ -11,9 +11,14 @@
   "scripts": {
     "build": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "node -e \"console.log('no tests yet')\""
+    "test": "node -e \"console.log('ui package smoke ok')\""
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/react": "^19.0.10",
     "typescript": "~5.8.2"
   }
 }

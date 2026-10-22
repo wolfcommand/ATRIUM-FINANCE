@@ -146,3 +146,25 @@
 ### Risks
 - Inject endpoint must stay disabled in prod (`WOLF_ALLOW_EVENT_INJECT=false`).
 - createApp registers consumer globally — tests must reset handlers between cases.
+
+---
+
+## Prompt 8 — admin screens + employee CSV import
+
+| Item | Decision |
+|---|---|
+| Admin auth | Seeded `owner@wolf.example` or `portal.admin` grant |
+| Screens | Portal `/admin` + API `/v1/admin/*` (users, memberships, grants, access requests, audit, import) |
+| Import | Preview-then-commit CSV; all-or-nothing; stubbed mailer (in-memory outbox) |
+| Audit | `audit_events` table; every admin mutate + import writes a row |
+| Source | Reused WIP from `cursor/wolf-prompt-8-admin-50d0` @ c5c0d50, rebased onto Prompt 7 |
+
+### Changed
+- Admin routes/modules/tests; portal admin UI; schema for audit + access_requests.
+
+### Not done
+- MFA for admins; production SMTP; rich grant UI beyond JSON tables.
+
+### Risks
+- Owner email hard-coded for admin gate — replace with role before go-live.
+- Portal admin SSR fetches need API reachable from portal server.

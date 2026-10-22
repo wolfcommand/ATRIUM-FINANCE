@@ -84,7 +84,7 @@ export function buildMe(db: Db, session: SessionRow): MeResponse | null {
     appCatalog: [
       { key: "finance", label: "Finance", status: "available" },
       { key: "hr", label: "HR", status: "available" },
-      { key: "academy", label: "Academy", status: "coming_soon" },
+      { key: "academy", label: "Academy", status: "available" },
       { key: "content", label: "Content Machine", status: "coming_soon" },
     ],
   };

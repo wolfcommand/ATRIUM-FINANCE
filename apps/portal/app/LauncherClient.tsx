@@ -25,6 +25,7 @@ export function LauncherClient({ me }: { me: Me }) {
 
   async function requestAccess(appKey: "finance" | "hr") {
     if (!company) return;
+    if (appKey !== "finance" && appKey !== "hr") return;
     setPendingKey(appKey);
     setMessage("");
     try {
@@ -147,7 +148,9 @@ export function LauncherClient({ me }: { me: Me }) {
             const href =
               item.key === "finance"
                 ? `/open-finance?companyId=${encodeURIComponent(company.id)}`
-                : `/open-hr?companyId=${encodeURIComponent(company.id)}`;
+                : item.key === "hr"
+                  ? `/open-hr?companyId=${encodeURIComponent(company.id)}`
+                  : `/academy?companyId=${encodeURIComponent(company.id)}`;
             return (
               <WolfAppTile
                 key={item.key}

@@ -124,3 +124,25 @@
 ### Risks
 - Internal `createJournal` callers without session still stamp `defaultCompanyId`.
 - Audit log is process-local (lost on restart) until core audit module lands in `apps/api`.
+
+---
+
+## Prompt 7 — events (partial; no HR publishers)
+
+| Item | Decision |
+|---|---|
+| Outbox | `outbox_events` in Wolf API SQLite; `enqueueOutboxEvent` + `relayOnce` in-process emulator |
+| Transport | In-memory handler bus in dev/CI (Pub/Sub later) |
+| Finance consumer | Idempotent `finance.employee_ref` + `finance_consumer_processed`; DLQ `dead_letter_events` |
+| HR publishers | **Deferred** with Prompt 6 — use `POST /v1/events/inject` (fake) for tests |
+| Event types | `employee.created`, `employee.updated`, `employment.ended` (v1 minimal payload) |
+
+### Changed
+- Schema + outbox/relay + finance employee_ref consumer + DLQ + tests.
+
+### Not done
+- Real HR publishers; Pub/Sub; admin DLQ UI; replacing any Finance→HR table reads (none found in Finance Level-2).
+
+### Risks
+- Inject endpoint must stay disabled in prod (`WOLF_ALLOW_EVENT_INJECT=false`).
+- createApp registers consumer globally — tests must reset handlers between cases.

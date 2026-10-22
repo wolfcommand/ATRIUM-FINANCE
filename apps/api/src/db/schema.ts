@@ -91,4 +91,44 @@ CREATE TABLE IF NOT EXISTS grants (
   reason TEXT,
   ticket_ref TEXT
 );
+
+-- Prompt 7: transactional outbox + finance read model (no HR publishers yet)
+CREATE TABLE IF NOT EXISTS outbox_events (
+  id TEXT PRIMARY KEY,
+  aggregate_type TEXT NOT NULL,
+  aggregate_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  event_version INTEGER NOT NULL DEFAULT 1,
+  payload TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  published_at TEXT,
+  idempotency_key TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS dead_letter_events (
+  id TEXT PRIMARY KEY,
+  outbox_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  event_version INTEGER NOT NULL,
+  payload TEXT NOT NULL,
+  error_message TEXT NOT NULL,
+  failed_at TEXT NOT NULL,
+  consumer TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS finance_employee_ref (
+  employment_id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  cost_centre TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active','ended')),
+  source_event_id TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS finance_consumer_processed (
+  idempotency_key TEXT PRIMARY KEY,
+  consumer TEXT NOT NULL,
+  processed_at TEXT NOT NULL
+);
 `

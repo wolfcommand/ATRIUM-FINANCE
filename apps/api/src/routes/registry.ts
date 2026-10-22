@@ -33,6 +33,8 @@ export const API_ROUTE_REGISTRY: ApiRouteEntry[] = [
   { method: "GET", path: "/v1/access/grants", permission: "identity.me.read" },
   { method: "GET", path: "/v1/access/grants-for-user/:userId", permission: "identity.me.read" },
   { method: "POST", path: "/v1/access/authorize", permission: "identity.me.read" },
+  { method: "GET", path: "/v1/access/requests", permission: "identity.me.read" },
+  { method: "POST", path: "/v1/access/requests", permission: "identity.me.read" },
 
   { method: "POST", path: "/v1/events/inject", permission: "integration.events.inject" },
   { method: "POST", path: "/v1/events/relay", permission: "integration.events.relay" },

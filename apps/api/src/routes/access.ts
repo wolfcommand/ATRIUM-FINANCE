@@ -4,6 +4,10 @@ import { z } from "zod";
 import { getDb } from "../db/client.js";
 import { requirePermission } from "../modules/access/requirePermission.js";
 import { getGrantsVersion } from "../modules/access/grantsVersion.js";
+import {
+  createAccessRequest,
+  listMyAccessRequests,
+} from "../modules/access/accessRequests.js";
 
 const bodySchema = z.object({
   action: z.string().min(1),
@@ -101,6 +105,44 @@ export function accessRouter(): Router {
         grants,
       );
       res.json({ ...decision, grants_version: getGrantsVersion(auth.userId) });
+    },
+  );
+
+  /** Staff self-serve: request an add-on for a company they belong to. */
+  router.get(
+    "/v1/access/requests",
+    requirePermission("identity.me.read", { classification: 1, resourceType: "access_request" }),
+    (req, res) => {
+      res.json({ items: listMyAccessRequests(req.wolfAuth!.userId) });
+    },
+  );
+
+  router.post(
+    "/v1/access/requests",
+    requirePermission("identity.me.read", { classification: 1, resourceType: "access_request" }),
+    (req, res) => {
+      const schema = z.object({
+        companyId: z.string().min(1),
+        permissionKey: z.enum(["app.finance", "app.hr"]),
+        reason: z.string().min(3).max(500),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "invalid_body", details: parsed.error.flatten() });
+        return;
+      }
+      try {
+        const result = createAccessRequest({
+          requesterUserId: req.wolfAuth!.userId,
+          companyId: parsed.data.companyId,
+          permissionKey: parsed.data.permissionKey,
+          reason: parsed.data.reason,
+        });
+        res.status(201).json(result);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "create_failed";
+        res.status(400).json({ error: msg });
+      }
     },
   );
 

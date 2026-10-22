@@ -5,6 +5,7 @@ import { newId } from "../lib/ids.js";
 import { requireAdminSession } from "../modules/admin/session.js";
 import { writeAdminAudit, listAdminAudit } from "../modules/admin/audit.js";
 import { bumpGrantsVersion } from "../modules/access/grantsVersion.js";
+import { applyAccessRequestApproval } from "../modules/access/accessRequests.js";
 import {
   previewEmployeeImport,
   commitEmployeeImport,
@@ -224,14 +225,7 @@ export function adminRouter() {
       `UPDATE access_requests SET status = ?, decided_at = ?, decided_by = ? WHERE id = ?`,
     ).run(decision, new Date().toISOString(), admin.user_id, row.id);
     if (decision === "approved") {
-      db.prepare(
-        `INSERT OR IGNORE INTO permissions (key, description, default_classification) VALUES (?, ?, 2)`,
-      ).run(row.permission_key, row.permission_key);
-      db.prepare(
-        `INSERT INTO grants (id, user_id, role_id, permission_key, scope_type, scope_id, valid_from, valid_to, granted_by, reason, ticket_ref)
-         VALUES (?, ?, NULL, ?, 'company', ?, date('now'), NULL, ?, 'access request approved', NULL)`,
-      ).run(newId(), row.requester_user_id, row.permission_key, row.company_id, admin.user_id);
-      bumpGrantsVersion(row.requester_user_id);
+      applyAccessRequestApproval(row, admin.user_id);
     }
     writeAdminAudit({
       actorUserId: admin.user_id,

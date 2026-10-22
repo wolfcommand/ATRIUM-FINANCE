@@ -171,6 +171,21 @@
 
 ---
 
+## Phase 2 — Shell and admin (2026-10-22)
+
+| Item | Decision |
+|---|---|
+| Design system | Minimal `@wolf/ui` tokens + Shell/Button/AppTile (Fraunces + Source Sans 3) — expand later |
+| Locked apps | Launcher shows Finance/HR locked with **Request access**; Academy/Content = coming soon |
+| Self-serve requests | `POST /v1/access/requests` (`app.finance` \| `app.hr`) for employed staff via `identity.me.read` |
+| Approve side effects | `app.*` approval inserts `app_entitlements` + minimal company grants |
+| Admin link | Shown only when `capabilities.portalAdmin` from grants (still enforced by authorize) |
+
+### Not done
+- Full shadcn/Figma design-system package; MFA on admin; rich membership editor.
+
+---
+
 ## Phase 1 — Trust core gaps (2026-10-22)
 
 | Item | Decision |

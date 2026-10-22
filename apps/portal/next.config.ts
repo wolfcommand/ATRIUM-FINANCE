@@ -4,6 +4,7 @@ const API_ORIGIN = process.env.WOLF_API_ORIGIN ?? "http://127.0.0.1:4000";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  transpilePackages: ["@wolf/ui"],
   async rewrites() {
     return [
       {
